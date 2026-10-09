@@ -1,0 +1,7 @@
+[theme]
+base = "light"
+primaryColor = "#0B3954"              # Deep navy accent
+backgroundColor = "#F8FAFC"           # Soft slate white
+secondaryBackgroundColor = "#EDF2F7" # Sidebar and cards background
+textColor = "#1E293B"                 # Dark charcoal text
+font = "sans serif"

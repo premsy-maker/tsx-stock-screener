@@ -3,86 +3,86 @@ import pandas as pd
 from tabulate import tabulate
 from notifierV1 import send_stock_email
 
-# Canadian TSX Watchlist (V1 core sample)
-WATCHLIST = [
+WATCHLIST = {
     # --- Index / All-in-One ETFs ---
-    "XEQT.TO",   # iShares Core Equity ETF Portfolio (100% Equity)
-    "XIU.TO",    # iShares S&P/TSX 60 Index ETF
+    "XEQT.TO": "iShares Core Equity ETF Portfolio",
+    "XIU.TO": "iShares S&P/TSX 60 Index ETF",
 
-    # --- Financials (Big Banks, Lifecos & Asset Managers) ---
-    "RY.TO",     # Royal Bank of Canada
-    "TD.TO",     # Toronto-Dominion Bank
-    "BMO.TO",    # Bank of Montreal
-    "BNS.TO",    # Bank of Nova Scotia
-    "CM.TO",     # Canadian Imperial Bank of Commerce
-    "NA.TO",     # National Bank of Canada
-    "MFC.TO",    # Manulife Financial
-    "SLF.TO",    # Sun Life Financial
-    "BN.TO",     # Brookfield Corporation
-    "BAM.TO",    # Brookfield Asset Management
-    "POW.TO",    # Power Corporation of Canada
-    "FFH.TO",    # Fairfax Financial Holdings
-    "IFC.TO",    # Intact Financial
+    # --- Financials ---
+    "RY.TO": "Royal Bank of Canada",
+    "TD.TO": "Toronto-Dominion Bank",
+    "BMO.TO": "Bank of Montreal",
+    "BNS.TO": "Bank of Nova Scotia",
+    "CM.TO": "Canadian Imperial Bank of Commerce",
+    "NA.TO": "National Bank of Canada",
+    "MFC.TO": "Manulife Financial",
+    "SLF.TO": "Sun Life Financial",
+    "BN.TO": "Brookfield Corporation",
+    "BAM.TO": "Brookfield Asset Management",
+    "POW.TO": "Power Corporation of Canada",
+    "FFH.TO": "Fairfax Financial Holdings",
+    "IFC.TO": "Intact Financial",
 
-    # --- Energy (Pipelines & Producers) ---
-    "ENB.TO",    # Enbridge
-    "TRP.TO",    # TC Energy
-    "PPL.TO",    # Pembina Pipeline
-    "CNQ.TO",    # Canadian Natural Resources
-    "SU.TO",     # Suncor Energy
-    "CVE.TO",    # Cenovus Energy
-    "IMO.TO",    # Imperial Oil
-    "TOU.TO",    # Tourmaline Oil
+    # --- Energy ---
+    "ENB.TO": "Enbridge",
+    "TRP.TO": "TC Energy",
+    "PPL.TO": "Pembina Pipeline",
+    "CNQ.TO": "Canadian Natural Resources",
+    "SU.TO": "Suncor Energy",
+    "CVE.TO": "Cenovus Energy",
+    "IMO.TO": "Imperial Oil",
+    "TOU.TO": "Tourmaline Oil",
 
     # --- Industrials, Rails & Services ---
-    "CNR.TO",    # Canadian National Railway
-    "CP.TO",     # Canadian Pacific Kansas City
-    "WCN.TO",    # Waste Connections
-    "WSP.TO",    # WSP Global
-    "TRI.TO",    # Thomson Reuters
-    "CAE.TO",    # CAE Inc.
+    "CNR.TO": "Canadian National Railway",
+    "CP.TO": "Canadian Pacific Kansas City",
+    "WCN.TO": "Waste Connections",
+    "WSP.TO": "WSP Global",
+    "TRI.TO": "Thomson Reuters",
+    "CAE.TO": "CAE Inc.",
 
     # --- Technology ---
-    "SHOP.TO",   # Shopify
-    "CSU.TO",    # Constellation Software
-    "CLS.TO",    # Celestica
-    "GIB-A.TO",  # CGI Inc. (Class A)
-    "OTEX.TO",   # OpenText
+    "SHOP.TO": "Shopify",
+    "CSU.TO": "Constellation Software",
+    "CLS.TO": "Celestica",
+    "GIB-A.TO": "CGI Inc.",
+    "OTEX.TO": "OpenText",
 
     # --- Consumer Staples & Discretionary ---
-    "ATD.TO",    # Alimentation Couche-Tard
-    "DOL.TO",    # Dollarama
-    "L.TO",      # Loblaw Companies
-    "MRU.TO",    # Metro Inc.
-    "WN.TO",     # George Weston
-    "QSR.TO",    # Restaurant Brands International (Tim Hortons / BK)
-    "CTC-A.TO",  # Canadian Tire
-    "MG.TO",     # Magna International
-    "GIL.TO",    # Gildan Activewear
+    "ATD.TO": "Alimentation Couche-Tard",
+    "DOL.TO": "Dollarama",
+    "L.TO": "Loblaw Companies",
+    "MRU.TO": "Metro Inc.",
+    "WN.TO": "George Weston",
+    "QSR.TO": "Restaurant Brands International",
+    "CTC-A.TO": "Canadian Tire",
+    "MG.TO": "Magna International",
+    "GIL.TO": "Gildan Activewear",
 
     # --- Utilities & Infrastructure ---
-    "FTS.TO",    # Fortis Inc.
-    "H.TO",      # Hydro One
-    "EMA.TO",    # Emera
-    "BIP-UN.TO", # Brookfield Infrastructure Partners
+    "FTS.TO": "Fortis Inc.",
+    "H.TO": "Hydro One",
+    "EMA.TO": "Emera",
+    "BIP-UN.TO": "Brookfield Infrastructure Partners",
 
     # --- Telecommunications ---
-    "T.TO",      # Telus
-    "BCE.TO",    # BCE Inc.
-    "RCI-B.TO",  # Rogers Communications (Class B)
+    "T.TO": "Telus",
+    "BCE.TO": "BCE Inc.",
+    "RCI-B.TO": "Rogers Communications",
 
     # --- Materials, Mining & Fertilizers ---
-    "NTR.TO",    # Nutrien
-    "ABX.TO",    # Barrick Gold / Mining
-    "AEM.TO",    # Agnico Eagle Mines
-    "FNV.TO",    # Franco-Nevada
-    "WPM.TO",    # Wheaton Precious Metals
-    "CCO.TO",    # Cameco
-    "TECK-B.TO", # Teck Resources (Class B)
-    "FM.TO",     # First Quantum Minerals
-    "K.TO",      # Kinross Gold
-]
-#The RSI (Relative Strength Index) simply measures: Over the last 14 days, were the upward price moves stronger than the downward price moves?
+    "NTR.TO": "Nutrien",
+    "ABX.TO": "Barrick Gold / Mining",
+    "AEM.TO": "Agnico Eagle Mines",
+    "FNV.TO": "Franco-Nevada",
+    "WPM.TO": "Wheaton Precious Metals",
+    "CCO.TO": "Cameco",
+    "TECK-B.TO": "Teck Resources",
+    "FM.TO": "First Quantum Minerals",
+    "K.TO": "Kinross Gold",
+}
+
+# The RSI (Relative Strength Index) measures: Over the last 14 days, were the upward price moves stronger than downward price moves?
 def calculate_rsi(series: pd.Series, period: int = 14) -> pd.Series:
     delta = series.diff()
     gain = (delta.where(delta > 0, 0.0)).rolling(window=period).mean()
@@ -90,12 +90,12 @@ def calculate_rsi(series: pd.Series, period: int = 14) -> pd.Series:
     rs = gain / (loss.replace(0, 0.00001))
     return 100 - (100 / (1 + rs))
 
-def analyze_ticker(ticker: str):
-    df = yf.download(ticker, period="1y", interval="1d", progress=False)
+def analyze_symbol(symbol: str, company_name: str):
+    df = yf.download(symbol, period="1y", interval="1d", progress=False)
     if df.empty or len(df) < 200:
         return None
 
-    close = df['Close'][ticker] if isinstance(df['Close'], pd.DataFrame) else df['Close']
+    close = df['Close'][symbol] if isinstance(df['Close'], pd.DataFrame) else df['Close']
 
     sma_50 = close.rolling(window=50).mean()
     sma_200 = close.rolling(window=200).mean()
@@ -121,11 +121,12 @@ def analyze_ticker(ticker: str):
         summary = "Trading within baseline"
 
     return {
-        "Ticker": ticker,
-        "Price (CAD)": f"${current_price:.2f}",
-        "RSI (14)": f"{current_rsi:.1f}",
-        "SMA 50": f"${current_50:.2f}",
-        "SMA 200": f"${current_200:.2f}",
+        "Symbol": symbol,
+        "Company": company_name,
+        "Price": round(current_price, 2),
+        "RSI_14": round(current_rsi, 1),
+        "SMA_50": round(current_50, 2),
+        "SMA_200": round(current_200, 2),
         "Signal": signal,
         "Rationale": summary
     }
@@ -135,19 +136,21 @@ def main():
     results = []
     actionable = []
 
-    for ticker in WATCHLIST:
-        row = analyze_ticker(ticker)
+    for symbol, company_name in WATCHLIST.items():
+        row = analyze_symbol(symbol, company_name)
         if row:
             results.append(row)
             # Collect stocks that are NOT in 'KEEP / HOLD'
             if row["Signal"] != "KEEP / HOLD":
                 actionable.append(row)
 
-    # 1. Print full terminal grid
+    # 1. Print full terminal grid and persist results to CSV
     if results:
+        results_df = pd.DataFrame(results)
+        results_df.to_csv("screener_results.csv", index=False)
         print(tabulate(results, headers="keys", tablefmt="fancy_grid"))
     else:
-        print("No data retrieved. Verify your internet connection or ticker symbols.")
+        print("No data retrieved. Verify your internet connection or symbols.")
         return
 
     # 2. Trigger the notifier email if any Buy/Sell signals were detected
@@ -157,12 +160,13 @@ def main():
         html_rows = "".join([
             f"""
             <tr>
-                <td style="padding: 8px; border: 1px solid #ddd;"><b>{item['Ticker']}</b></td>
-                <td style="padding: 8px; border: 1px solid #ddd;">{item['Price (CAD)']}</td>
+                <td style="padding: 8px; border: 1px solid #ddd;"><b>{item['Symbol']}</b></td>
+                <td style="padding: 8px; border: 1px solid #ddd;">{item['Company']}</td>
+                <td style="padding: 8px; border: 1px solid #ddd;">${item['Price']:.2f}</td>
                 <td style="padding: 8px; border: 1px solid #ddd; font-weight: bold; color: {'#008000' if 'BUY' in item['Signal'] else '#b30000'};">
                     {item['Signal']}
                 </td>
-                <td style="padding: 8px; border: 1px solid #ddd;">{item['RSI (14)']}</td>
+                <td style="padding: 8px; border: 1px solid #ddd;">{item['RSI_14']}</td>
                 <td style="padding: 8px; border: 1px solid #ddd;">{item['Rationale']}</td>
             </tr>
             """
@@ -173,11 +177,12 @@ def main():
         <html>
         <body style="font-family: Arial, sans-serif; color: #333;">
             <h2 style="color: #0b3954;">🚨 TSX Market Actionable Alerts</h2>
-            <p>The following stocks have met your technical criteria for action:</p>
+            <p>The following symbols have met your technical criteria for action:</p>
             <table style="border-collapse: collapse; width: 100%; text-align: left; font-size: 14px;">
                 <thead>
                     <tr style="background-color: #f2f2f2;">
-                        <th style="padding: 8px; border: 1px solid #ddd;">Ticker</th>
+                        <th style="padding: 8px; border: 1px solid #ddd;">Symbol</th>
+                        <th style="padding: 8px; border: 1px solid #ddd;">Company</th>
                         <th style="padding: 8px; border: 1px solid #ddd;">Price</th>
                         <th style="padding: 8px; border: 1px solid #ddd;">Signal</th>
                         <th style="padding: 8px; border: 1px solid #ddd;">RSI (14)</th>
@@ -199,7 +204,7 @@ def main():
             html_body=email_html
         )
     else:
-        print("\nAll stocks are currently in 'KEEP / HOLD'. No alert email sent.")
+        print("\nAll symbols are currently in 'KEEP / HOLD'. No alert email sent.")
 
 # --- REQUIRED ENTRY POINT ---
 if __name__ == "__main__":
