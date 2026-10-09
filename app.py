@@ -359,6 +359,23 @@ def render_live_dashboard():
                 * **Calculation Resolution:** Indicator computations (`RSI_14`, `SMA_50`, `SMA_200`) use completed daily session bars. Trend shifts represent daily closing criteria rather than intra-second tick fluctuations.
                 """
             )
+        with st.expander("6. Canadian Market Alternatives & Differentiation", expanded=False):
+            st.markdown(
+                """
+                | Existing Tool | Coverage | Core Strengths | Limitations Solved by Bay Street Pulse |
+                | :--- | :--- | :--- | :--- |
+                | **TradingView (TSX)** | Global & TSX | Advanced interactive charting & indicators | Complex interface; lacks automated, opinionated signal alerts without paid tiers. |
+                | **Barchart (Canada)** | TSX & TSXV | Pre-computed technical scans | High ad density; scans 1,800+ stocks including illiquid micro-caps. |
+                | **TMX / Globe Investor** | TSX | Official exchange data & fundamental metrics | Primarily fundamental-driven; limited technical momentum automation. |
+                | **Finviz** | US Only | Gold-standard visual screening & heatmaps | **Does not support Canadian equities (TSX).** |
+
+                **Key Differentiation:**
+                * **Curated TSX Universe:** Monitors 59 high-liquidity large-caps and core benchmark ETFs rather than speculative micro-caps.
+                * **Rule-Based Classifications:** Translates mathematical indicator pairs directly into prescriptive signals (`BUY / ACCUMULATE`, `SELL / EXIT`).
+                * **Automated Alert Pipeline:** Runs twice daily via GitHub Actions to deliver actionable triggers directly to your inbox without requiring daily manual website visits.
+                """
+            )
+
 
     # Footer Disclaimer Note
     st.markdown("---")
