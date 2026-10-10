@@ -138,15 +138,29 @@ def load_screener_results():
         mod_time = datetime.fromtimestamp(os.path.getmtime(csv_file))
         df = pd.read_csv(csv_file)
 
-        # Map company names if not present
-        if "Company" not in df.columns and "Ticker" in df.columns:
-            df["Company"] = df["Ticker"].map(
+        # Detect the symbol identifier column ('Symbol' or 'Ticker')
+        sym_col = (
+            "Symbol"
+            if "Symbol" in df.columns
+            else ("Ticker" if "Ticker" in df.columns else None)
+        )
+
+        # Map company names if missing
+        if "Company" not in df.columns and sym_col is not None:
+            df["Company"] = df[sym_col].map(
                 lambda t: COMPANY_NAMES.get(str(t).strip(), "—")
             )
 
-        # Standardize numeric columns
+        # Sanitize numeric columns (strip '$' or commas, convert to float)
         for col in ["Price", "RSI_14", "SMA_50", "SMA_200"]:
             if col in df.columns:
+                df[col] = (
+                    df[col]
+                    .astype(str)
+                    .str.replace("$", "", regex=False)
+                    .str.replace(",", "", regex=False)
+                    .str.strip()
+                )
                 df[col] = pd.to_numeric(df[col], errors="coerce")
 
         return df, mod_time
@@ -156,6 +170,13 @@ def load_screener_results():
 
 
 df_raw, scan_time = load_screener_results()
+
+# Identify primary symbol column ('Symbol' or 'Ticker')
+symbol_col = (
+    "Symbol"
+    if "Symbol" in df_raw.columns
+    else ("Ticker" if "Ticker" in df_raw.columns else None)
+)
 
 # ---------------------------------------------------------
 # Sidebar Configuration & Filters
@@ -184,7 +205,7 @@ selected_signals = st.sidebar.multiselect(
     default=["BUY / ACCUMULATE", "SELL / EXIT", "TRIM / TAKE PROFIT"],
 )
 
-# 2. RSI Window
+# 2. RSI Window Slider
 rsi_min, rsi_max = st.sidebar.slider(
     "14-Day RSI Window",
     min_value=0.0,
@@ -193,7 +214,7 @@ rsi_min, rsi_max = st.sidebar.slider(
     step=1.0,
 )
 
-# 3. SMA Trend Regime
+# 3. SMA Trend Alignment
 sma_trend_filter = st.sidebar.radio(
     "SMA Trend Configuration",
     options=[
@@ -221,12 +242,12 @@ TrendNorth provides rule-based quantitative indicators for educational and infor
 )
 
 # ---------------------------------------------------------
-# Filter Application
+# Apply Filters
 # ---------------------------------------------------------
 filtered_df = df_raw.copy()
 
 if not filtered_df.empty:
-    if selected_signals:
+    if selected_signals and "Signal" in filtered_df.columns:
         filtered_df = filtered_df[filtered_df["Signal"].isin(selected_signals)]
 
     if "RSI_14" in filtered_df.columns:
@@ -238,23 +259,34 @@ if not filtered_df.empty:
     if (
         sma_trend_filter == "Bullish (SMA 50 > SMA 200)"
         and "SMA_50" in filtered_df.columns
+        and "SMA_200" in filtered_df.columns
     ):
         filtered_df = filtered_df[filtered_df["SMA_50"] > filtered_df["SMA_200"]]
     elif (
         sma_trend_filter == "Bearish / Death Cross (SMA 50 < SMA 200)"
         and "SMA_50" in filtered_df.columns
+        and "SMA_200" in filtered_df.columns
     ):
         filtered_df = filtered_df[filtered_df["SMA_50"] < filtered_df["SMA_200"]]
 
     if search_query:
         query = search_query.lower()
-        filtered_df = filtered_df[
-            filtered_df["Ticker"].astype(str).str.lower().str.contains(query)
-            | filtered_df["Company"]
-            .astype(str)
-            .str.lower()
-            .str.contains(query)
-        ]
+        search_match = pd.Series(False, index=filtered_df.index)
+        if symbol_col and symbol_col in filtered_df.columns:
+            search_match |= (
+                filtered_df[symbol_col]
+                .astype(str)
+                .str.lower()
+                .str.contains(query, na=False)
+            )
+        if "Company" in filtered_df.columns:
+            search_match |= (
+                filtered_df["Company"]
+                .astype(str)
+                .str.lower()
+                .str.contains(query, na=False)
+            )
+        filtered_df = filtered_df[search_match]
 
 # ---------------------------------------------------------
 # Main UI Layout
@@ -290,7 +322,7 @@ with col_m1:
 with col_m2:
     buy_count = (
         len(df_raw[df_raw["Signal"] == "BUY / ACCUMULATE"])
-        if not df_raw.empty
+        if not df_raw.empty and "Signal" in df_raw.columns
         else 0
     )
     st.metric("🟢 Buy / Accumulate", buy_count)
@@ -298,7 +330,7 @@ with col_m2:
 with col_m3:
     sell_count = (
         len(df_raw[df_raw["Signal"] == "SELL / EXIT"])
-        if not df_raw.empty
+        if not df_raw.empty and "Signal" in df_raw.columns
         else 0
     )
     st.metric("🔴 Sell / Exit", sell_count)
@@ -306,7 +338,7 @@ with col_m3:
 with col_m4:
     trim_count = (
         len(df_raw[df_raw["Signal"] == "TRIM / TAKE PROFIT"])
-        if not df_raw.empty
+        if not df_raw.empty and "Signal" in df_raw.columns
         else 0
     )
     st.metric("🟡 Trim / Profit", trim_count)
@@ -323,18 +355,34 @@ with tab_table:
     if filtered_df.empty:
         st.warning("No TSX assets match the current filter selection.")
     else:
-        # Reorder columns for display
-        cols = [c for c in ["Ticker", "Company", "Price", "Signal", "RSI_14", "SMA_50", "SMA_200", "Rationale"] if c in filtered_df.columns]
+        # Build display column order safely
+        possible_cols = [
+            "Symbol",
+            "Ticker",
+            "Company",
+            "Price",
+            "Signal",
+            "RSI_14",
+            "SMA_50",
+            "SMA_200",
+            "Rationale",
+        ]
+        cols = [c for c in possible_cols if c in filtered_df.columns]
         display_table = filtered_df[cols].copy()
 
         # Format numeric presentation
+        format_dict = {}
+        if "Price" in display_table.columns:
+            format_dict["Price"] = "${:.2f}"
+        if "SMA_50" in display_table.columns:
+            format_dict["SMA_50"] = "${:.2f}"
+        if "SMA_200" in display_table.columns:
+            format_dict["SMA_200"] = "${:.2f}"
+        if "RSI_14" in display_table.columns:
+            format_dict["RSI_14"] = "{:.1f}"
+
         st.dataframe(
-            display_table.style.format({
-                "Price": "${:.2f}",
-                "SMA_50": "${:.2f}",
-                "SMA_200": "${:.2f}",
-                "RSI_14": "{:.1f}",
-            }),
+            display_table.style.format(format_dict),
             use_container_width=True,
             height=500,
         )
@@ -358,64 +406,100 @@ with tab_charts:
 
         with c_left:
             st.subheader("RSI Momentum Distribution")
-            fig_rsi = px.histogram(
-                df_raw,
-                x="RSI_14",
-                color="Signal",
-                nbins=20,
-                color_discrete_map={
-                    "BUY / ACCUMULATE": "#10b981",
-                    "SELL / EXIT": "#ef4444",
-                    "TRIM / TAKE PROFIT": "#f59e0b",
-                    "KEEP / HOLD": "#64748b",
-                },
-                labels={"RSI_14": "14-Day RSI", "count": "Stock Count"},
-            )
-            # Reference benchmark lines
-            fig_rsi.add_vline(
-                x=40,
-                line_dash="dash",
-                line_color="#10b981",
-                annotation_text="Pullback Dip (40)",
-                annotation_position="top left",
-            )
-            fig_rsi.add_vline(
-                x=75,
-                line_dash="dash",
-                line_color="#ef4444",
-                annotation_text="Overextended (75)",
-                annotation_position="top right",
-            )
-            fig_rsi.update_layout(
-                template="plotly_dark",
-                margin=dict(l=20, r=20, t=30, b=20),
-                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-            )
-            st.plotly_chart(fig_rsi, use_container_width=True)
+            if "RSI_14" in df_raw.columns:
+                fig_rsi = px.histogram(
+                    df_raw.dropna(subset=["RSI_14"]),
+                    x="RSI_14",
+                    color="Signal" if "Signal" in df_raw.columns else None,
+                    nbins=20,
+                    color_discrete_map={
+                        "BUY / ACCUMULATE": "#10b981",
+                        "SELL / EXIT": "#ef4444",
+                        "TRIM / TAKE PROFIT": "#f59e0b",
+                        "KEEP / HOLD": "#64748b",
+                    },
+                    labels={"RSI_14": "14-Day RSI", "count": "Stock Count"},
+                )
+                fig_rsi.add_vline(
+                    x=40,
+                    line_dash="dash",
+                    line_color="#10b981",
+                    annotation_text="Pullback Dip (40)",
+                    annotation_position="top left",
+                )
+                fig_rsi.add_vline(
+                    x=75,
+                    line_dash="dash",
+                    line_color="#ef4444",
+                    annotation_text="Overextended (75)",
+                    annotation_position="top right",
+                )
+                fig_rsi.update_layout(
+                    template="plotly_dark",
+                    margin=dict(l=20, r=20, t=30, b=20),
+                    legend=dict(
+                        orientation="h",
+                        yanchor="bottom",
+                        y=1.02,
+                        xanchor="right",
+                        x=1,
+                    ),
+                )
+                st.plotly_chart(fig_rsi, use_container_width=True)
+            else:
+                st.info("RSI_14 column not found.")
 
         with c_right:
             st.subheader("Price vs. 50-Day Moving Average")
-            fig_scatter = px.scatter(
-                df_raw,
-                x="SMA_50",
-                y="Price",
-                color="Signal",
-                hover_name="Ticker",
-                hover_data=["Company", "RSI_14"],
-                color_discrete_map={
-                    "BUY / ACCUMULATE": "#10b981",
-                    "SELL / EXIT": "#ef4444",
-                    "TRIM / TAKE PROFIT": "#f59e0b",
-                    "KEEP / HOLD": "#64748b",
-                },
-                labels={"SMA_50": "50-Day SMA (CAD)", "Price": "Price (CAD)"},
-            )
-            fig_scatter.update_layout(
-                template="plotly_dark",
-                margin=dict(l=20, r=20, t=30, b=20),
-                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-            )
-            st.plotly_chart(fig_scatter, use_container_width=True)
+            try:
+                # Ensure clean dataframe slice with strictly valid numbers
+                scatter_df = df_raw.dropna(subset=["SMA_50", "Price"]).copy()
+
+                if not scatter_df.empty:
+                    # Resolve hover candidates dynamically
+                    hover_candidates = ["Company", "Company Name", "RSI_14"]
+                    active_hover = [
+                        c for c in hover_candidates if c in scatter_df.columns
+                    ]
+
+                    fig_scatter = px.scatter(
+                        scatter_df,
+                        x="SMA_50",
+                        y="Price",
+                        color=(
+                            "Signal" if "Signal" in scatter_df.columns else None
+                        ),
+                        hover_name=symbol_col,  # Uses 'Symbol' or 'Ticker' dynamically
+                        hover_data=active_hover if active_hover else None,
+                        color_discrete_map={
+                            "BUY / ACCUMULATE": "#10b981",
+                            "SELL / EXIT": "#ef4444",
+                            "TRIM / TAKE PROFIT": "#f59e0b",
+                            "KEEP / HOLD": "#64748b",
+                        },
+                        labels={
+                            "SMA_50": "50-Day SMA (CAD)",
+                            "Price": "Price (CAD)",
+                        },
+                    )
+                    fig_scatter.update_layout(
+                        template="plotly_dark",
+                        margin=dict(l=20, r=20, t=30, b=20),
+                        legend=dict(
+                            orientation="h",
+                            yanchor="bottom",
+                            y=1.02,
+                            xanchor="right",
+                            x=1,
+                        ),
+                    )
+                    st.plotly_chart(fig_scatter, use_container_width=True)
+                else:
+                    st.info(
+                        "Insufficient numeric data to render the scatter chart."
+                    )
+            except Exception as e:
+                st.warning(f"Could not render scatter chart: {e}")
 
 # ---------------------------------------------------------
 # Tab 3: User Manual & Documentation
@@ -435,7 +519,7 @@ with tab_manual:
     with st.expander("2. Business Problem & Solution Scope", expanded=False):
         st.markdown(
             """
-            * **Manual Fatigue:** Analyzing 59 charts daily causes cognitive fatigue and missed entries. TrendNorth aggregates the entire TSX liquid core in seconds.
+            * **Manual Fatigue:** Analyzing dozens of charts daily causes cognitive fatigue and missed entries. TrendNorth aggregates the entire TSX liquid core in seconds.
             * **Emotional Bias:** Subjective trading leads to buying overextended tops or catching falling knives. TrendNorth enforces deterministic criteria.
             * **Actionable Timeliness:** Automated GitHub Actions cron pipelines dispatch notifications directly when opportunities strike.
             """
@@ -471,7 +555,9 @@ with tab_manual:
             """
         )
 
-    with st.expander("6. Canadian Market Alternatives & Differentiation", expanded=False):
+    with st.expander(
+        "6. Canadian Market Alternatives & Differentiation", expanded=False
+    ):
         st.markdown(
             """
             | Existing Platform | TSX Coverage | Core Strengths | Limitations Solved by TrendNorth |
@@ -497,8 +583,18 @@ with st.popover("💬 Submit Feedback"):
 
     fb_name = st.text_input("Your Name", placeholder="e.g. Premsy")
     fb_email = st.text_input("Your Email", placeholder="name@domain.com")
-    fb_sentiment = st.selectbox("Topic", ["Feature Suggestion", "Bug Report", "Data Inaccuracy", "General Feedback"])
-    fb_message = st.text_area("Your Comments", placeholder="Describe your experience or suggestion...")
+    fb_sentiment = st.selectbox(
+        "Topic",
+        [
+            "Feature Suggestion",
+            "Bug Report",
+            "Data Inaccuracy",
+            "General Feedback",
+        ],
+    )
+    fb_message = st.text_area(
+        "Your Comments", placeholder="Describe your experience or suggestion..."
+    )
 
     def is_valid_email(addr: str) -> bool:
         return bool(re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", addr.strip()))
@@ -519,6 +615,10 @@ with st.popover("💬 Submit Feedback"):
                     message=fb_message.strip(),
                 )
                 if success:
-                    st.success("Thank you! Your feedback has been sent directly to the development team.")
+                    st.success(
+                        "Thank you! Your feedback has been sent directly to the development team."
+                    )
                 else:
-                    st.error("Could not send feedback at this time. Please check SMTP secrets.")
+                    st.error(
+                        "Could not send feedback at this time. Please check SMTP secrets."
+                    )
