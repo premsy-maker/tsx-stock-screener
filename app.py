@@ -192,7 +192,16 @@ symbol_col = (
 # ---------------------------------------------------------
 # Sidebar Configuration & Filters
 # ---------------------------------------------------------
-st.sidebar.title("TrendNorth")
+#st.sidebar.title("TrendNorth")
+st.sidebar.markdown(
+    """
+    <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+        <h2 style="margin: 0; padding: 0; font-size: 1.5rem;">TrendNorth</h2>
+        <img src="https://flagcdn.com/w40/ca.png" width="24" height="12" style="border-radius: 2px;">
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
 st.sidebar.caption("TSX Momentum & Trend Screener (v1.0-beta)")
 
 refresh_interval = st.sidebar.selectbox(
@@ -301,7 +310,21 @@ if not filtered_df.empty:
 # ---------------------------------------------------------
 # Main UI Layout & Localized Eastern Timestamps
 # ---------------------------------------------------------
-st.title("📈 TrendNorth")
+#st.title("📈 TrendNorth")
+st.markdown(
+    """
+    <div style="display: flex; align-items: center; gap: 14px; margin-bottom: 4px;">
+        <h1 style="margin: 0; padding: 0; font-size: 2.25rem; font-weight: 700;">📈 TrendNorth</h1>
+        <img src="https://flagcdn.com/w40/ca.png" 
+             srcset="https://flagcdn.com/w80/ca.png 2x" 
+             width="34" 
+             height="17" 
+             alt="Canada" 
+             style="border-radius: 3px; box-shadow: 0 1px 4px rgba(0,0,0,0.25); display: inline-block;">
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
 
 # Use Eastern Time (ET) for page header
 now_et = datetime.now(ET_ZONE)
