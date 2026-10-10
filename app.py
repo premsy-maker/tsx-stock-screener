@@ -1,6 +1,7 @@
+from datetime import datetime
 import os
 import re
-from datetime import datetime
+import time
 from zoneinfo import ZoneInfo
 import pandas as pd
 import plotly.express as px
@@ -49,6 +50,12 @@ st.markdown(
         bottom: 38px;
         right: 12px;
         z-index: 1000;
+    }
+    /* Honeypot field container hiding */
+    .hp-container {
+        display: none !important;
+        position: absolute !important;
+        left: -9999px !important;
     }
     </style>
     <div class="version-badge">TrendNorth v1.0-beta</div>
@@ -192,12 +199,11 @@ symbol_col = (
 # ---------------------------------------------------------
 # Sidebar Configuration & Filters
 # ---------------------------------------------------------
-#st.sidebar.title("TrendNorth")
 st.sidebar.markdown(
     """
-    <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+    <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
         <h2 style="margin: 0; padding: 0; font-size: 1.5rem;">TrendNorth</h2>
-        <img src="https://flagcdn.com/w40/ca.png" width="24" height="12" style="border-radius: 2px;">
+        <img src="https://flagcdn.com/w40/ca.png" width="24" height="12" style="border-radius: 2px;" alt="Canada">
     </div>
     """,
     unsafe_allow_html=True,
@@ -310,7 +316,6 @@ if not filtered_df.empty:
 # ---------------------------------------------------------
 # Main UI Layout & Localized Eastern Timestamps
 # ---------------------------------------------------------
-#st.title("📈 TrendNorth")
 st.markdown(
     """
     <div style="display: flex; align-items: center; gap: 14px; margin-bottom: 4px;">
@@ -494,7 +499,7 @@ with tab_charts:
               x="SMA_50",
               y="Price",
               color="Signal" if "Signal" in scatter_df.columns else None,
-              hover_name=symbol_col,  # Uses 'Symbol' or 'Ticker' dynamically
+              hover_name=symbol_col,
               hover_data=active_hover if active_hover else None,
               color_discrete_map={
                   "BUY / ACCUMULATE": "#10b981",
@@ -595,51 +600,97 @@ with tab_manual:
     )
 
 # ---------------------------------------------------------
-# Floating User Feedback Popover
+# Floating User Feedback Popover (Spam & Bot-Protected)
 # ---------------------------------------------------------
 with st.popover("💬 Submit Feedback"):
   st.markdown("#### Send Us Feedback")
-  st.caption("Help improve TrendNorth with bug reports or feature requests.")
+  st.caption("Help improve TrendNorth with bug reports or feature suggestions.")
 
-  fb_name = st.text_input("Your Name", placeholder="e.g. Premsy")
-  fb_email = st.text_input("Your Email", placeholder="name@domain.com")
-  fb_sentiment = st.selectbox(
-      "Topic",
-      [
-          "Feature Suggestion",
-          "Bug Report",
-          "Data Inaccuracy",
-          "General Feedback",
-      ],
-  )
-  fb_message = st.text_area(
-      "Your Comments", placeholder="Describe your experience or suggestion..."
-  )
+  # 1. Session submission check
+  if st.session_state.get("feedback_sent_success", False):
+    st.success("✅ Thank you! Your feedback has already been received.")
+  else:
+    fb_name = st.text_input("Your Name", max_chars=50, placeholder="e.g. Alex")
+    fb_email = st.text_input(
+        "Your Email", max_chars=80, placeholder="name@domain.com"
+    )
+    fb_sentiment = st.selectbox(
+        "Topic",
+        [
+            "Feature Suggestion",
+            "Bug Report",
+            "Data Inaccuracy",
+            "General Feedback",
+        ],
+    )
+    fb_message = st.text_area(
+        "Your Comments",
+        max_chars=600,
+        placeholder="Describe your suggestion or issue...",
+    )
 
-  def is_valid_email(addr: str) -> bool:
-    return bool(re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", addr.strip()))
+    # 2. Invisible Honeypot Field (traps bots)
+    st.markdown(
+        """
+        <div class="hp-container">
+            <input type="text" name="honeypot_field" id="honeypot_field" autocomplete="off" tabindex="-1">
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    hp_bot = st.text_input(
+        "Website URL",
+        label_visibility="collapsed",
+        key="honeypot_check",
+        placeholder="Leave this empty",
+    )
 
-  if st.button("Submit Feedback", type="primary", use_container_width=True):
-    if not fb_name.strip():
-      st.error("Please provide your name.")
-    elif not is_valid_email(fb_email):
-      st.error("Please enter a valid email address.")
-    elif len(fb_message.strip().split()) < 3:
-      st.error("Please enter a brief sentence describing your feedback.")
-    else:
-      with st.spinner("Submitting feedback..."):
-        success = send_feedback_email(
-            sender_name=fb_name.strip(),
-            sender_email=fb_email.strip(),
-            sentiment=fb_sentiment,
-            message=fb_message.strip(),
-        )
-        if success:
-          st.success(
-              "Thank you! Your feedback has been sent directly to the development"
-              " team."
-          )
+    def is_valid_email(addr: str) -> bool:
+      pattern = r"^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$"
+      return bool(re.match(pattern, addr.strip()))
+
+    if st.button("Submit Feedback", type="primary", use_container_width=True):
+      # Honeypot validation
+      if hp_bot.strip():
+        st.success("Thank you! Your feedback has been received.")
+        st.stop()
+
+      # Text and syntax validation
+      if not fb_name.strip():
+        st.error("Please provide your name.")
+      elif not is_valid_email(fb_email):
+        st.error("Please enter a valid email address.")
+      elif len(fb_message.strip().split()) < 3:
+        st.error("Please enter at least a few words describing your feedback.")
+      elif any(
+          link in fb_message.lower() for link in ["http://", "https://", "www."]
+      ):
+        st.error("Links and URLs are not permitted in feedback submissions.")
+      else:
+        # Cooldown timer check (60 seconds)
+        last_submission = st.session_state.get("last_fb_time", 0)
+        current_epoch = time.time()
+
+        if current_epoch - last_submission < 60:
+          st.warning("Please wait a minute before sending another submission.")
         else:
-          st.error(
-              "Could not send feedback at this time. Please check SMTP secrets."
-          )
+          with st.spinner("Submitting feedback..."):
+            success = send_feedback_email(
+                sender_name=fb_name.strip(),
+                sender_email=fb_email.strip(),
+                sentiment=fb_sentiment,
+                message=fb_message.strip(),
+            )
+            if success:
+              st.session_state.feedback_sent_success = True
+              st.session_state.last_fb_time = current_epoch
+              st.success(
+                  "Thank you! Your feedback has been sent directly to the"
+                  " development team."
+              )
+              st.rerun()
+            else:
+              st.error(
+                  "Could not send feedback at this time. Please verify SMTP"
+                  " secrets."
+              )
