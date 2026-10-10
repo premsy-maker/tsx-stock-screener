@@ -1,5 +1,7 @@
-yfinance
+streamlit
 pandas
-python-dotenv
-requests
+plotly
+yfinance
 tabulate
+requests
+python-dotenv
