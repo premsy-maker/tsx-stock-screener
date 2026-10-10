@@ -1,60 +1,60 @@
 Symbol,Company,Price,RSI_14,SMA_50,SMA_200,Signal,Rationale
-XEQT.TO,iShares Core Equity ETF Portfolio,46.17,53.3,45.63,42.95,KEEP / HOLD,Trading within baseline
-XIU.TO,iShares S&P/TSX 60 Index ETF,53.12,46.9,53.42,50.29,KEEP / HOLD,Trading within baseline
-RY.TO,Royal Bank of Canada,273.79,27.7,286.73,257.61,BUY / ACCUMULATE,Bullish trend + Pullback dip
-TD.TO,Toronto-Dominion Bank,164.16,26.7,167.93,149.5,BUY / ACCUMULATE,Bullish trend + Pullback dip
-BMO.TO,Bank of Montreal,231.74,24.9,243.37,216.35,BUY / ACCUMULATE,Bullish trend + Pullback dip
-BNS.TO,Bank of Nova Scotia,126.24,32.0,126.32,110.3,BUY / ACCUMULATE,Bullish trend + Pullback dip
-CM.TO,Canadian Imperial Bank of Commerce,155.95,37.1,160.5,146.71,BUY / ACCUMULATE,Bullish trend + Pullback dip
-NA.TO,National Bank of Canada,197.82,23.6,214.08,198.01,BUY / ACCUMULATE,Bullish trend + Pullback dip
-MFC.TO,Manulife Financial,60.69,35.8,60.73,53.97,BUY / ACCUMULATE,Bullish trend + Pullback dip
-SLF.TO,Sun Life Financial,109.94,32.0,111.32,98.74,BUY / ACCUMULATE,Bullish trend + Pullback dip
-BN.TO,Brookfield Corporation,52.97,46.6,55.83,59.81,SELL / EXIT,Death cross (Bearish trend)
-BAM.TO,Brookfield Asset Management,65.88,56.3,68.17,65.87,KEEP / HOLD,Trading within baseline
-POW.TO,Power Corporation of Canada,89.06,28.2,92.16,79.08,BUY / ACCUMULATE,Bullish trend + Pullback dip
-FFH.TO,Fairfax Financial Holdings,2240.5,48.8,2269.2,2321.46,SELL / EXIT,Death cross (Bearish trend)
-IFC.TO,Intact Financial,242.33,20.9,260.55,264.11,SELL / EXIT,Death cross (Bearish trend)
-ENB.TO,Enbridge,66.34,37.5,68.94,70.93,SELL / EXIT,Death cross (Bearish trend)
-TRP.TO,TC Energy,85.86,58.9,85.8,86.03,SELL / EXIT,Death cross (Bearish trend)
-PPL.TO,Pembina Pipeline,67.75,63.5,66.17,61.94,KEEP / HOLD,Trading within baseline
-CNQ.TO,Canadian Natural Resources,70.72,65.9,68.03,60.55,KEEP / HOLD,Trading within baseline
-SU.TO,Suncor Energy,102.97,74.1,93.88,83.76,KEEP / HOLD,Trading within baseline
-CVE.TO,Cenovus Energy,44.87,53.2,43.96,36.19,KEEP / HOLD,Trading within baseline
-IMO.TO,Imperial Oil,175.48,46.3,180.08,166.03,KEEP / HOLD,Trading within baseline
-TOU.TO,Tourmaline Oil,64.01,73.9,61.24,61.79,SELL / EXIT,Death cross (Bearish trend)
-CNR.TO,Canadian National Railway,168.08,56.3,171.62,156.33,KEEP / HOLD,Trading within baseline
-CP.TO,Canadian Pacific Kansas City,120.88,46.9,125.46,117.25,KEEP / HOLD,Trading within baseline
-WCN.TO,Waste Connections,218.39,50.0,225.79,225.73,KEEP / HOLD,Trading within baseline
-WSP.TO,WSP Global,163.15,34.0,182.58,207.63,SELL / EXIT,Death cross (Bearish trend)
-TRI.TO,Thomson Reuters,147.0,71.5,141.66,132.85,KEEP / HOLD,Trading within baseline
-CAE.TO,CAE Inc.,33.94,44.5,34.78,37.5,SELL / EXIT,Death cross (Bearish trend)
-SHOP.TO,Shopify,243.09,82.2,202.7,179.48,TRIM / TAKE PROFIT,Overextended momentum
-CSU.TO,Constellation Software,2995.04,73.5,2993.35,2767.42,KEEP / HOLD,Trading within baseline
-CLS.TO,Celestica,519.57,59.5,468.33,462.04,KEEP / HOLD,Trading within baseline
-GIB-A.TO,CGI Inc.,99.9,58.7,100.63,101.38,SELL / EXIT,Death cross (Bearish trend)
-OTEX.TO,OpenText,33.75,66.4,33.13,33.01,KEEP / HOLD,Trading within baseline
-ATD.TO,Alimentation Couche-Tard,77.91,29.3,83.51,81.23,BUY / ACCUMULATE,Bullish trend + Pullback dip
-DOL.TO,Dollarama,192.32,78.3,182.47,184.75,SELL / EXIT,Death cross (Bearish trend)
-L.TO,Loblaw Companies,62.71,53.4,62.17,62.83,SELL / EXIT,Death cross (Bearish trend)
-MRU.TO,Metro Inc.,90.45,43.7,89.83,92.14,SELL / EXIT,Death cross (Bearish trend)
-WN.TO,George Weston,101.3,53.4,100.09,98.6,KEEP / HOLD,Trading within baseline
-QSR.TO,Restaurant Brands International,101.34,47.5,104.27,100.52,KEEP / HOLD,Trading within baseline
-CTC-A.TO,Canadian Tire,192.81,65.1,193.61,185.14,KEEP / HOLD,Trading within baseline
-MG.TO,Magna International,91.2,59.3,93.08,85.09,KEEP / HOLD,Trading within baseline
-GIL.TO,Gildan Activewear,59.97,37.2,69.98,78.89,SELL / EXIT,Death cross (Bearish trend)
-FTS.TO,Fortis Inc.,76.23,63.8,76.42,76.13,KEEP / HOLD,Trading within baseline
-H.TO,Hydro One,50.91,44.7,53.06,55.58,SELL / EXIT,Death cross (Bearish trend)
-EMA.TO,Emera,65.25,22.0,69.49,70.16,SELL / EXIT,Death cross (Bearish trend)
-BIP-UN.TO,Brookfield Infrastructure Partners,53.18,66.1,52.28,51.01,KEEP / HOLD,Trading within baseline
-T.TO,Telus,11.08,26.5,12.73,15.63,SELL / EXIT,Death cross (Bearish trend)
-BCE.TO,BCE Inc.,26.99,12.8,30.91,32.09,SELL / EXIT,Death cross (Bearish trend)
-RCI-B.TO,Rogers Communications,42.35,13.9,48.08,49.18,SELL / EXIT,Death cross (Bearish trend)
-NTR.TO,Nutrien,96.26,25.3,101.16,96.27,BUY / ACCUMULATE,Bullish trend + Pullback dip
+XEQT.TO,iShares Core Equity ETF Portfolio,46.16,53.2,45.63,42.95,KEEP / HOLD,Trading within baseline
+XIU.TO,iShares S&P/TSX 60 Index ETF,53.08,46.4,53.42,50.29,KEEP / HOLD,Trading within baseline
+RY.TO,Royal Bank of Canada,273.78,27.7,286.73,257.61,BUY / ACCUMULATE,Bullish trend + Pullback dip
+TD.TO,Toronto-Dominion Bank,164.19,30.5,166.8,148.47,BUY / ACCUMULATE,Bullish trend + Pullback dip
+BMO.TO,Bank of Montreal,232.1,25.6,243.38,216.35,BUY / ACCUMULATE,Bullish trend + Pullback dip
+BNS.TO,Bank of Nova Scotia,126.03,31.2,126.32,110.29,BUY / ACCUMULATE,Bullish trend + Pullback dip
+CM.TO,Canadian Imperial Bank of Commerce,155.63,36.3,160.49,146.7,BUY / ACCUMULATE,Bullish trend + Pullback dip
+NA.TO,National Bank of Canada,198.06,24.2,214.09,198.01,BUY / ACCUMULATE,Bullish trend + Pullback dip
+MFC.TO,Manulife Financial,60.55,34.5,60.72,53.97,BUY / ACCUMULATE,Bullish trend + Pullback dip
+SLF.TO,Sun Life Financial,109.82,31.4,111.31,98.74,BUY / ACCUMULATE,Bullish trend + Pullback dip
+BN.TO,Brookfield Corporation,52.95,46.5,55.83,59.81,SELL / EXIT,Death cross (Bearish trend)
+BAM.TO,Brookfield Asset Management,65.52,54.0,68.16,65.86,KEEP / HOLD,Trading within baseline
+POW.TO,Power Corporation of Canada,89.01,28.0,92.16,79.08,BUY / ACCUMULATE,Bullish trend + Pullback dip
+FFH.TO,Fairfax Financial Holdings,2250.89,51.3,2269.41,2321.51,SELL / EXIT,Death cross (Bearish trend)
+IFC.TO,Intact Financial,242.29,20.9,260.55,264.11,SELL / EXIT,Death cross (Bearish trend)
+ENB.TO,Enbridge,66.51,39.4,68.94,70.93,SELL / EXIT,Death cross (Bearish trend)
+TRP.TO,TC Energy,85.69,58.2,85.79,86.02,SELL / EXIT,Death cross (Bearish trend)
+PPL.TO,Pembina Pipeline,67.55,62.7,66.16,61.94,KEEP / HOLD,Trading within baseline
+CNQ.TO,Canadian Natural Resources,70.8,66.2,68.03,60.55,KEEP / HOLD,Trading within baseline
+SU.TO,Suncor Energy,103.04,74.2,93.88,83.76,KEEP / HOLD,Trading within baseline
+CVE.TO,Cenovus Energy,44.75,52.5,43.96,36.19,KEEP / HOLD,Trading within baseline
+IMO.TO,Imperial Oil,175.76,46.8,180.08,166.03,KEEP / HOLD,Trading within baseline
+TOU.TO,Tourmaline Oil,63.93,73.7,61.24,61.79,SELL / EXIT,Death cross (Bearish trend)
+CNR.TO,Canadian National Railway,168.06,56.3,171.62,156.32,KEEP / HOLD,Trading within baseline
+CP.TO,Canadian Pacific Kansas City,120.58,45.7,125.46,117.25,KEEP / HOLD,Trading within baseline
+WCN.TO,Waste Connections,218.17,49.5,225.79,225.73,KEEP / HOLD,Trading within baseline
+WSP.TO,WSP Global,163.63,34.6,182.59,207.63,SELL / EXIT,Death cross (Bearish trend)
+TRI.TO,Thomson Reuters,147.3,71.8,141.66,132.85,KEEP / HOLD,Trading within baseline
+CAE.TO,CAE Inc.,33.86,43.4,34.78,37.5,SELL / EXIT,Death cross (Bearish trend)
+SHOP.TO,Shopify,243.83,82.4,202.72,179.49,TRIM / TAKE PROFIT,Overextended momentum
+CSU.TO,Constellation Software,3003.78,74.1,2993.53,2767.46,KEEP / HOLD,Trading within baseline
+CLS.TO,Celestica,516.79,58.9,468.27,462.03,KEEP / HOLD,Trading within baseline
+GIB-A.TO,CGI Inc.,100.08,59.2,100.63,101.38,SELL / EXIT,Death cross (Bearish trend)
+OTEX.TO,OpenText,33.82,67.0,33.14,33.01,KEEP / HOLD,Trading within baseline
+ATD.TO,Alimentation Couche-Tard,77.65,27.4,83.5,81.23,BUY / ACCUMULATE,Bullish trend + Pullback dip
+DOL.TO,Dollarama,191.93,78.0,182.35,184.63,SELL / EXIT,Death cross (Bearish trend)
+L.TO,Loblaw Companies,62.64,52.8,62.16,62.83,SELL / EXIT,Death cross (Bearish trend)
+MRU.TO,Metro Inc.,90.38,43.3,89.83,92.14,SELL / EXIT,Death cross (Bearish trend)
+WN.TO,George Weston,101.19,52.8,100.09,98.59,KEEP / HOLD,Trading within baseline
+QSR.TO,Restaurant Brands International,101.17,46.5,104.26,100.52,KEEP / HOLD,Trading within baseline
+CTC-A.TO,Canadian Tire,192.44,64.4,193.6,185.13,KEEP / HOLD,Trading within baseline
+MG.TO,Magna International,91.24,59.4,93.08,85.09,KEEP / HOLD,Trading within baseline
+GIL.TO,Gildan Activewear,59.82,36.7,69.98,78.89,SELL / EXIT,Death cross (Bearish trend)
+FTS.TO,Fortis Inc.,76.03,61.5,76.41,76.13,KEEP / HOLD,Trading within baseline
+H.TO,Hydro One,50.78,42.9,53.06,55.58,SELL / EXIT,Death cross (Bearish trend)
+EMA.TO,Emera,65.2,21.8,69.49,70.16,SELL / EXIT,Death cross (Bearish trend)
+BIP-UN.TO,Brookfield Infrastructure Partners,52.89,65.0,52.27,51.0,KEEP / HOLD,Trading within baseline
+T.TO,Telus,11.03,25.9,12.72,15.63,SELL / EXIT,Death cross (Bearish trend)
+BCE.TO,BCE Inc.,26.8,12.4,30.91,32.09,SELL / EXIT,Death cross (Bearish trend)
+RCI-B.TO,Rogers Communications,42.46,14.1,48.09,49.18,SELL / EXIT,Death cross (Bearish trend)
+NTR.TO,Nutrien,96.33,25.4,101.16,96.27,BUY / ACCUMULATE,Bullish trend + Pullback dip
 ABX.TO,Barrick Gold / Mining,58.53,45.4,59.61,58.73,KEEP / HOLD,Trading within baseline
-AEM.TO,Agnico Eagle Mines,269.9,45.1,266.27,261.51,KEEP / HOLD,Trading within baseline
-FNV.TO,Franco-Nevada,350.67,40.4,350.29,330.05,KEEP / HOLD,Trading within baseline
-WPM.TO,Wheaton Precious Metals,197.72,41.2,198.93,184.69,KEEP / HOLD,Trading within baseline
-CCO.TO,Cameco,125.82,42.7,132.44,146.65,SELL / EXIT,Death cross (Bearish trend)
-TECK-B.TO,Teck Resources,96.9,56.1,93.16,82.35,KEEP / HOLD,Trading within baseline
-FM.TO,First Quantum Minerals,39.1,32.7,43.61,39.17,BUY / ACCUMULATE,Bullish trend + Pullback dip
-K.TO,Kinross Gold,33.92,30.2,38.56,40.63,SELL / EXIT,Death cross (Bearish trend)
+AEM.TO,Agnico Eagle Mines,269.83,45.1,266.27,261.51,KEEP / HOLD,Trading within baseline
+FNV.TO,Franco-Nevada,349.61,39.6,350.27,330.05,BUY / ACCUMULATE,Bullish trend + Pullback dip
+WPM.TO,Wheaton Precious Metals,197.66,41.2,198.93,184.69,KEEP / HOLD,Trading within baseline
+CCO.TO,Cameco,125.61,42.4,132.44,146.65,SELL / EXIT,Death cross (Bearish trend)
+TECK-B.TO,Teck Resources,97.1,56.4,93.17,82.36,KEEP / HOLD,Trading within baseline
+FM.TO,First Quantum Minerals,39.09,32.7,43.61,39.17,BUY / ACCUMULATE,Bullish trend + Pullback dip
+K.TO,Kinross Gold,33.85,29.8,38.56,40.63,SELL / EXIT,Death cross (Bearish trend)
