@@ -7,3 +7,4 @@ __pycache__/
 # Streamlit local secrets
 .streamlit/secrets.toml
 secrets.toml
+*.code-workspace
