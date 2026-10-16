@@ -1,23 +1,29 @@
-from datetime import datetime
 import os
 import re
 import time
+from datetime import date, datetime, time as dtime, timedelta
 from zoneinfo import ZoneInfo
 import pandas as pd
 import plotly.express as px
 import streamlit as st
 
-# Import feedback mailer helper
-from notifierV1 import send_feedback_email
+# Import feedback sender from notifier
+try:
+  from notifierV1 import send_feedback_email
+except ImportError:
 
-# ---------------------------------------------------------
-# Timezone Configuration (Eastern Time / TSX Trading Hours)
-# ---------------------------------------------------------
+  def send_feedback_email(
+      sender_name: str, sender_email: str, sentiment: str, message: str
+  ) -> bool:
+    return False
+
+
+# -----------------------------------------------------------------------------
+# Configuration & Timezones
+# -----------------------------------------------------------------------------
 ET_ZONE = ZoneInfo("America/Toronto")
+CSV_FILE = "screener_results.csv"
 
-# ---------------------------------------------------------
-# Page Configuration & Brand Setup
-# ---------------------------------------------------------
 st.set_page_config(
     page_title="TrendNorth | TSX Momentum Screener",
     page_icon="📈",
@@ -25,52 +31,10 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# Custom Styling (Dark theme adjustments, badge, & popover placement)
-st.markdown(
-    """
-    <style>
-    /* Fixed bottom-right version badge */
-    .version-badge {
-        position: fixed;
-        bottom: 12px;
-        right: 12px;
-        background-color: rgba(30, 41, 59, 0.85);
-        color: #94a3b8;
-        padding: 4px 10px;
-        border-radius: 6px;
-        font-size: 11px;
-        font-family: monospace;
-        border: 1px solid #334155;
-        z-index: 999;
-        pointer-events: none;
-    }
-    /* Fixed floating feedback button */
-    div[data-testid="stPopover"] {
-        position: fixed;
-        bottom: 38px;
-        right: 12px;
-        z-index: 1000;
-    }
-    /* Honeypot field container hiding */
-    .hp-container {
-        display: none !important;
-        position: absolute !important;
-        left: -9999px !important;
-    }
-    </style>
-    <div class="version-badge">TrendNorth v1.0-beta</div>
-""",
-    unsafe_allow_html=True,
-)
-
-# ---------------------------------------------------------
-# Company Name Lookup Dictionary
-# ---------------------------------------------------------
+# Core Watchlist Company Names Mapping (for fallback display)
 COMPANY_NAMES = {
-    # Benchmark ETFs
     "XEQT.TO": "iShares Core Equity ETF Portfolio",
     "XIU.TO": "iShares S&P/TSX 60 Index ETF",
-    # Financials
     "RY.TO": "Royal Bank of Canada",
     "TD.TO": "Toronto-Dominion Bank",
     "BMO.TO": "Bank of Montreal",
@@ -84,7 +48,6 @@ COMPANY_NAMES = {
     "POW.TO": "Power Corporation of Canada",
     "FFH.TO": "Fairfax Financial Holdings",
     "IFC.TO": "Intact Financial",
-    # Energy
     "ENB.TO": "Enbridge Inc.",
     "TRP.TO": "TC Energy Corporation",
     "PPL.TO": "Pembina Pipeline",
@@ -93,83 +56,178 @@ COMPANY_NAMES = {
     "CVE.TO": "Cenovus Energy",
     "IMO.TO": "Imperial Oil",
     "TOU.TO": "Tourmaline Oil",
-    # Industrials & Rails
     "CNR.TO": "Canadian National Railway",
     "CP.TO": "Canadian Pacific Kansas City",
     "WCN.TO": "Waste Connections",
     "WSP.TO": "WSP Global",
     "TRI.TO": "Thomson Reuters",
     "CAE.TO": "CAE Inc.",
-    # Technology
     "SHOP.TO": "Shopify Inc.",
     "CSU.TO": "Constellation Software",
-    "CLS.TO": "Celestica Inc.",
+    "CLS.TO": "Celestica",
     "GIB-A.TO": "CGI Inc.",
     "OTEX.TO": "OpenText Corporation",
-    # Consumer
     "ATD.TO": "Alimentation Couche-Tard",
     "DOL.TO": "Dollarama Inc.",
     "L.TO": "Loblaw Companies",
     "MRU.TO": "Metro Inc.",
-    "WN.TO": "George Weston Ltd.",
+    "WN.TO": "George Weston",
     "QSR.TO": "Restaurant Brands International",
     "CTC-A.TO": "Canadian Tire Corporation",
     "MG.TO": "Magna International",
     "GIL.TO": "Gildan Activewear",
-    # Utilities & Infrastructure
     "FTS.TO": "Fortis Inc.",
     "H.TO": "Hydro One",
-    "EMA.TO": "Emera Inc.",
+    "EMA.TO": "Emera Incorporated",
     "BIP-UN.TO": "Brookfield Infrastructure Partners",
-    # Telecommunications
-    "T.TO": "Telus Corporation",
+    "T.TO": "TELUS Corporation",
     "BCE.TO": "BCE Inc.",
     "RCI-B.TO": "Rogers Communications",
-    # Materials & Mining
     "NTR.TO": "Nutrien Ltd.",
-    "ABX.TO": "Barrick Gold Corporation",
+    "ABX.TO": "Barrick Gold",
     "AEM.TO": "Agnico Eagle Mines",
-    "FNV.TO": "Franco-Nevada Corporation",
+    "FNV.TO": "Franco-Nevada",
     "WPM.TO": "Wheaton Precious Metals",
     "CCO.TO": "Cameco Corporation",
     "TECK-B.TO": "Teck Resources",
     "FM.TO": "First Quantum Minerals",
-    "K.TO": "Kinross Gold Corporation",
+    "K.TO": "Kinross Gold",
 }
 
 
-# ---------------------------------------------------------
-# Data Loader (Converts UTC to America/Toronto)
-# ---------------------------------------------------------
+# -----------------------------------------------------------------------------
+# TSX Market Status & Holiday Calculation Helper
+# -----------------------------------------------------------------------------
+def get_tsx_market_status(now_et: datetime):
+  """Calculates whether the Toronto Stock Exchange is currently OPEN or CLOSED.
+
+  Considers:
+  - Weekends (Saturday/Sunday)
+  - Canadian statutory and TSX market holidays
+  - Standard regular market hours (09:30:00 AM to 04:00:00 PM ET)
+  Returns:
+      (status_str, color_hex, elapsed_str, remaining_str, holiday_reason)
+  """
+  today = now_et.date()
+  year = today.year
+
+  def get_nth_weekday_of_month(yr, mo, weekday, n):
+    first_day = date(yr, mo, 1)
+    day_diff = (weekday - first_day.weekday()) % 7
+    return first_day + timedelta(days=day_diff + (n - 1) * 7)
+
+  # Good Friday (Anonymous Gregorian algorithm)
+  a = year % 19
+  b = year // 100
+  c = year % 100
+  d = b // 4
+  e = b % 4
+  f = (b + 8) // 25
+  g = (b - f + 1) // 3
+  h = (19 * a + b - d - g + 15) % 30
+  i = c // 4
+  k = c % 4
+  l = (32 + 2 * e + 2 * i - h - k) % 7
+  m = (a + 11 * h + 22 * l) // 451
+  easter_month = (h + l - 7 * m + 114) // 31
+  easter_day = ((h + l - 7 * m + 114) % 31) + 1
+  easter_sunday = date(year, easter_month, easter_day)
+  good_friday = easter_sunday - timedelta(days=2)
+
+  # TSX Observed Holidays
+  holidays = {
+      date(year, 1, 1): "New Year's Day",
+      get_nth_weekday_of_month(year, 2, 0, 3): "Family Day",
+      good_friday: "Good Friday",
+      date(year, 5, 24)
+      - timedelta(days=(date(year, 5, 24).weekday())): "Victoria Day",
+      date(year, 7, 1): "Canada Day",
+      get_nth_weekday_of_month(year, 8, 0, 1): "Civic Holiday",
+      get_nth_weekday_of_month(year, 9, 0, 1): "Labour Day",
+      date(year, 9, 30): "National Day for Truth and Reconciliation",
+      get_nth_weekday_of_month(year, 10, 0, 2): "Thanksgiving",
+      date(year, 12, 25): "Christmas Day",
+      date(year, 12, 26): "Boxing Day",
+  }
+
+  observed_holidays = {}
+  for hol_date, name in holidays.items():
+    if hol_date.weekday() == 5:  # Saturday -> Friday or Monday
+      observed_holidays[hol_date + timedelta(days=2)] = f"{name} (Observed)"
+    elif hol_date.weekday() == 6:  # Sunday -> Monday
+      observed_holidays[hol_date + timedelta(days=1)] = f"{name} (Observed)"
+    else:
+      observed_holidays[hol_date] = name
+
+  # 1. Weekend check
+  if today.weekday() >= 5:
+    return ("CLOSED", "#ef4444", "00:00:00", "--:--:--", "Weekend")
+
+  # 2. Holiday check
+  if today in observed_holidays:
+    return ("CLOSED", "#ef4444", "00:00:00", "--:--:--", observed_holidays[today])
+
+  # 3. Regular trading hours (09:30 AM to 04:00 PM ET)
+  market_open = dtime(9, 30, 0)
+  market_close = dtime(16, 0, 0)
+  current_time = now_et.time()
+
+  if market_open <= current_time < market_close:
+    open_dt = datetime.combine(today, market_open, tzinfo=ET_ZONE)
+    close_dt = datetime.combine(today, market_close, tzinfo=ET_ZONE)
+
+    elapsed_secs = int((now_et - open_dt).total_seconds())
+    rem_secs = int((close_dt - now_et).total_seconds())
+
+    e_hrs, e_mins, e_secs = (
+        elapsed_secs // 3600,
+        (elapsed_secs % 3600) // 60,
+        elapsed_secs % 60,
+    )
+    r_hrs, r_mins, r_secs = (
+        rem_secs // 3600,
+        (rem_secs % 3600) // 60,
+        rem_secs % 60,
+    )
+
+    elapsed_str = f"{e_hrs:02d}:{e_mins:02d}:{e_secs:02d}"
+    remaining_str = f"{r_hrs:02d}:{r_mins:02d}:{r_secs:02d}"
+
+    return ("OPEN", "#16a34a", elapsed_str, remaining_str, None)
+  else:
+    return (
+        "CLOSED",
+        "#ef4444",
+        "00:00:00",
+        "--:--:--",
+        "Outside Regular Hours",
+    )
+
+
+# -----------------------------------------------------------------------------
+# Data Loader
+# -----------------------------------------------------------------------------
 @st.cache_data(ttl=60)
 def load_screener_results():
-  csv_file = "screener_results.csv"
-  if not os.path.exists(csv_file):
+  if not os.path.exists(CSV_FILE):
     return pd.DataFrame(), None
 
   try:
-    # Read filesystem mtime and convert cleanly to Eastern Time
-    raw_mtime = os.path.getmtime(csv_file)
+    raw_mtime = os.path.getmtime(CSV_FILE)
     mod_time = datetime.fromtimestamp(raw_mtime, tz=ZoneInfo("UTC")).astimezone(
         ET_ZONE
     )
+    df = pd.read_csv(CSV_FILE)
 
-    df = pd.read_csv(csv_file)
+    # Standardize Symbol / Ticker column
+    if "Symbol" not in df.columns and "Ticker" in df.columns:
+      df.rename(columns={"Ticker": "Symbol"}, inplace=True)
 
-    # Detect symbol identifier column ('Symbol' or 'Ticker')
-    sym_col = (
-        "Symbol"
-        if "Symbol" in df.columns
-        else ("Ticker" if "Ticker" in df.columns else None)
-    )
-
-    # Populate Company names if missing
-    if "Company" not in df.columns and sym_col is not None:
-      df["Company"] = df[sym_col].map(
-          lambda t: COMPANY_NAMES.get(str(t).strip(), "—")
+    if "Company" not in df.columns and "Symbol" in df.columns:
+      df["Company"] = df["Symbol"].map(
+          lambda s: COMPANY_NAMES.get(str(s).strip(), "—")
       )
 
-    # Sanitize numeric fields (remove '$', commas, and convert to numeric)
     for col in ["Price", "RSI_14", "SMA_50", "SMA_200"]:
       if col in df.columns:
         df[col] = (
@@ -187,51 +245,34 @@ def load_screener_results():
     return pd.DataFrame(), None
 
 
-df_raw, scan_time = load_screener_results()
-
-# Identify active symbol column
-symbol_col = (
-    "Symbol"
-    if "Symbol" in df_raw.columns
-    else ("Ticker" if "Ticker" in df_raw.columns else None)
-)
-
-# ---------------------------------------------------------
-# Sidebar Configuration & Filters
-# ---------------------------------------------------------
+# -----------------------------------------------------------------------------
+# Sidebar: Filters & Configuration
+# -----------------------------------------------------------------------------
 st.sidebar.markdown(
     """
-    <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
+    <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
         <h2 style="margin: 0; padding: 0; font-size: 1.5rem;">TrendNorth</h2>
-        <img src="https://flagcdn.com/w40/ca.png" width="24" height="12" style="border-radius: 2px;" alt="Canada">
+        <img src="https://flagcdn.com/w40/ca.png" width="24" height="12" style="border-radius: 2px;">
     </div>
     """,
     unsafe_allow_html=True,
 )
-st.sidebar.caption("TSX Momentum & Trend Screener (v1.0-beta)")
 
-refresh_interval = st.sidebar.selectbox(
-    "⏱ Auto-Refresh Interval",
-    options=["1m", "5m", "15m", "Manual Only"],
-    index=1,
-)
-
-if st.sidebar.button("🔄 Refresh Data Now"):
+if st.sidebar.button(
+    "🔄 Refresh Data Now", help="Clear memory cache and reload CSV"
+):
   st.cache_data.clear()
   st.rerun()
 
 st.sidebar.markdown("---")
-st.sidebar.subheader("Filter Watchlist")
+st.sidebar.subheader("🔍 Screener Filters")
 
-# 1. Signal Filter
-all_signals = ["BUY / ACCUMULATE", "SELL / EXIT", "TRIM / TAKE PROFIT", "KEEP / HOLD"]
 selected_signals = st.sidebar.multiselect(
     "Signal Classification",
-    options=all_signals,
+    options=["BUY / ACCUMULATE", "SELL / EXIT", "TRIM / TAKE PROFIT", "KEEP / HOLD"],
     default=["BUY / ACCUMULATE", "SELL / EXIT", "TRIM / TAKE PROFIT"],
 )
 
-# 2. RSI Window Slider
 rsi_min, rsi_max = st.sidebar.slider(
     "14-Day RSI Window",
     min_value=0.0,
@@ -240,8 +281,7 @@ rsi_min, rsi_max = st.sidebar.slider(
     step=1.0,
 )
 
-# 3. SMA Trend Configuration
-sma_trend_filter = st.sidebar.radio(
+trend_filter = st.sidebar.radio(
     "SMA Trend Configuration",
     options=[
         "All Trends",
@@ -251,362 +291,300 @@ sma_trend_filter = st.sidebar.radio(
     index=0,
 )
 
-# 4. Search Filter
-search_query = st.sidebar.text_input(
-    "Find Symbol or Company", placeholder="e.g. RY, Shopify, Enbridge"
-).strip()
+search_term = (
+    st.sidebar.text_input("Find Symbol or Company", "").strip().upper()
+)
 
 st.sidebar.markdown("---")
-st.sidebar.markdown(
-    """
-<div style="font-size: 11px; color: #888; line-height: 1.4;">
-<b>⚠️ Educational Disclaimer:</b><br>
-TrendNorth provides rule-based quantitative indicators for educational and informational tracking only. It does not constitute financial, investment, legal, or tax advice. Always conduct independent research before making trading decisions.
-</div>
-""",
-    unsafe_allow_html=True,
+st.sidebar.caption(
+    "**Disclaimer:** For educational & informational analysis only. Not"
+    " financial advice."
 )
 
-# ---------------------------------------------------------
-# Apply Filters
-# ---------------------------------------------------------
-filtered_df = df_raw.copy()
 
-if not filtered_df.empty:
-  if selected_signals and "Signal" in filtered_df.columns:
-    filtered_df = filtered_df[filtered_df["Signal"].isin(selected_signals)]
+# -----------------------------------------------------------------------------
+# Main Application Layout
+# -----------------------------------------------------------------------------
+def render_dashboard():
+  df_raw, scan_time = load_screener_results()
 
-  if "RSI_14" in filtered_df.columns:
-    filtered_df = filtered_df[
-        (filtered_df["RSI_14"] >= rsi_min) & (filtered_df["RSI_14"] <= rsi_max)
-    ]
+  if df_raw is None or df_raw.empty:
+    st.warning(
+        f"Waiting for `{CSV_FILE}`... Run `python ScreenStocksV1.py` to"
+        " generate initial scan results."
+    )
+    return
 
-  if (
-      sma_trend_filter == "Bullish (SMA 50 > SMA 200)"
-      and "SMA_50" in filtered_df.columns
-      and "SMA_200" in filtered_df.columns
-  ):
+  df = df_raw.copy()
+
+  # Main Header with Canadian Flag
+  st.markdown(
+      """
+        <div style="display: flex; align-items: center; gap: 14px; margin-bottom: 2px;">
+            <h1 style="margin: 0; padding: 0; font-size: 2.25rem; font-weight: 700;">📈 TrendNorth</h1>
+            <img src="https://flagcdn.com/w40/ca.png" 
+                 srcset="https://flagcdn.com/w80/ca.png 2x" 
+                 width="34" 
+                 height="17" 
+                 alt="Canada" 
+                 style="border-radius: 3px; box-shadow: 0 1px 4px rgba(0,0,0,0.25); display: inline-block;">
+        </div>
+        """,
+      unsafe_allow_html=True,
+  )
+
+  # Timestamps
+  now_et = datetime.now(ET_ZONE)
+  today_display = now_et.strftime("%A, %B %d, %Y")
+  last_refreshed_time = now_et.strftime("%I:%M:%S %p ET")
+  scan_timestamp_str = (
+      scan_time.strftime("%b %d, %Y — %I:%M %p ET")
+      if scan_time
+      else "Awaiting scan"
+  )
+
+  # Calculate Market Status and Elapsed/Remaining Trading Counters
+  (
+      tsx_status,
+      status_color,
+      session_counter,
+      remaining_counter,
+      holiday_reason,
+  ) = get_tsx_market_status(now_et)
+  reason_badge = (
+      f"&nbsp;<span style='font-size: 11px; color: #94a3b8; font-weight:"
+      f" 400;'>({holiday_reason})</span>"
+      if holiday_reason
+      else ""
+  )
+
+  # Render Subtitle and Status Banner (Exact image placement)
+  st.markdown(
+      f"""
+        <div style="margin-bottom: 16px;">
+            <div style="color: #64748b; font-size: 13px; margin-top: -6px; margin-bottom: 8px;">
+                <b>Date:</b> {today_display} &nbsp;|&nbsp; 
+                <b>Last Refreshed:</b> {last_refreshed_time} &nbsp;|&nbsp; 
+                <b>Engine Scan Data:</b> {scan_timestamp_str}
+            </div>
+            <!-- TSX Status & Dual Counter Badge -->
+            <div style="display: inline-flex; align-items: center; gap: 14px; background-color: #f8fafc; border: 1px solid #e2e8f0; padding: 5px 14px; border-radius: 6px; box-shadow: 0 1px 2px rgba(0,0,0,0.02);">
+                <div style="display: flex; align-items: center; gap: 6px;">
+                    <span style="height: 10px; width: 10px; background-color: {status_color}; border-radius: 50%; display: inline-block;"></span>
+                    <span style="font-weight: 700; font-size: 13px; color: #1e293b;">TSX Status:</span>
+                    <span style="font-weight: 800; font-size: 13px; color: {status_color};">{tsx_status}</span>
+                    {reason_badge}
+                </div>
+                <div style="color: #cbd5e1; font-weight: 300;">|</div>
+                <div style="display: flex; align-items: center; gap: 6px;">
+                    <span style="font-size: 12px; color: #64748b; font-weight: 600;">Counter (Elapsed):</span>
+                    <span style="font-family: 'Courier New', Courier, monospace; font-size: 13px; font-weight: 700; color: #0f172a; background-color: #ffffff; padding: 1px 6px; border-radius: 4px; border: 1px solid #e2e8f0;">{session_counter}</span>
+                </div>
+                <div style="color: #cbd5e1; font-weight: 300;">|</div>
+                <div style="display: flex; align-items: center; gap: 6px;">
+                    <span style="font-size: 12px; color: #64748b; font-weight: 600;">Time to Close:</span>
+                    <span style="font-family: 'Courier New', Courier, monospace; font-size: 13px; font-weight: 700; color: #0f172a; background-color: #ffffff; padding: 1px 6px; border-radius: 4px; border: 1px solid #e2e8f0;">{remaining_counter}</span>
+                </div>
+            </div>
+        </div>
+        """,
+      unsafe_allow_html=True,
+  )
+
+  # Filter Data
+  filtered_df = df[df["Signal"].isin(selected_signals)]
+  filtered_df = filtered_df[filtered_df["RSI_14"].between(rsi_min, rsi_max)]
+
+  if trend_filter == "Bullish (SMA 50 > SMA 200)":
     filtered_df = filtered_df[filtered_df["SMA_50"] > filtered_df["SMA_200"]]
-  elif (
-      sma_trend_filter == "Bearish / Death Cross (SMA 50 < SMA 200)"
-      and "SMA_50" in filtered_df.columns
-      and "SMA_200" in filtered_df.columns
-  ):
+  elif trend_filter == "Bearish / Death Cross (SMA 50 < SMA 200)":
     filtered_df = filtered_df[filtered_df["SMA_50"] < filtered_df["SMA_200"]]
 
-  if search_query:
-    query = search_query.lower()
-    search_match = pd.Series(False, index=filtered_df.index)
-    if symbol_col and symbol_col in filtered_df.columns:
-      search_match |= (
-          filtered_df[symbol_col]
-          .astype(str)
-          .str.lower()
-          .str.contains(query, na=False)
+  if search_term:
+    sym_match = filtered_df["Symbol"].str.contains(search_term, na=False)
+    comp_match = filtered_df["Company"].str.upper().str.contains(search_term)
+    filtered_df = filtered_df[sym_match | comp_match]
+
+  # KPI Summary Metrics Row
+  col1, col2, col3, col4 = st.columns(4)
+  buy_count = len(df[df["Signal"] == "BUY / ACCUMULATE"])
+  sell_count = len(df[df["Signal"] == "SELL / EXIT"])
+  trim_count = len(df[df["Signal"] == "TRIM / TAKE PROFIT"])
+
+  col1.metric("Watchlist Displayed", f"{len(filtered_df)} / {len(df)}")
+  col2.metric("🟢 Buy / Accumulate", buy_count)
+  col3.metric("🔴 Sell / Exit", sell_count)
+  col4.metric("🟡 Trim / Profit", trim_count)
+
+  # Main Content Tabs
+  tab_data, tab_charts, tab_manual = st.tabs(
+      ["📋 Filtered Watchlist", "📊 Market Technicals", "📖 User Manual"]
+  )
+
+  with tab_data:
+    if filtered_df.empty:
+      st.info(
+          "No assets match your current filters. Adjust your filters in the"
+          " sidebar to expand results."
       )
-    if "Company" in filtered_df.columns:
-      search_match |= (
-          filtered_df["Company"]
-          .astype(str)
-          .str.lower()
-          .str.contains(query, na=False)
+    else:
+
+      def signal_styler(val):
+        if "BUY" in str(val):
+          return (
+              "color: #1b5e20; background-color: #e8f5e9; font-weight: bold;"
+          )
+        elif "SELL" in str(val):
+          return (
+              "color: #b71c1c; background-color: #ffebee; font-weight: bold;"
+          )
+        elif "TRIM" in str(val):
+          return (
+              "color: #b45309; background-color: #fef3c7; font-weight: bold;"
+          )
+        return "color: #475569;"
+
+      columns_order = [
+          "Symbol",
+          "Company",
+          "Price",
+          "Signal",
+          "RSI_14",
+          "SMA_50",
+          "SMA_200",
+          "Rationale",
+      ]
+      display_cols = [c for c in columns_order if c in filtered_df.columns]
+
+      styled_df = (
+          filtered_df[display_cols]
+          .style.format({
+              "Price": "${:.2f}",
+              "SMA_50": "${:.2f}",
+              "SMA_200": "${:.2f}",
+              "RSI_14": "{:.1f}",
+          })
+          .map(signal_styler, subset=["Signal"])
       )
-    filtered_df = filtered_df[search_match]
 
-# ---------------------------------------------------------
-# Main UI Layout & Localized Eastern Timestamps
-# ---------------------------------------------------------
-st.markdown(
-    """
-    <div style="display: flex; align-items: center; gap: 14px; margin-bottom: 4px;">
-        <h1 style="margin: 0; padding: 0; font-size: 2.25rem; font-weight: 700;">📈 TrendNorth</h1>
-        <img src="https://flagcdn.com/w40/ca.png" 
-             srcset="https://flagcdn.com/w80/ca.png 2x" 
-             width="34" 
-             height="17" 
-             alt="Canada" 
-             style="border-radius: 3px; box-shadow: 0 1px 4px rgba(0,0,0,0.25); display: inline-block;">
-    </div>
-    """,
-    unsafe_allow_html=True,
-)
+      st.dataframe(styled_df, use_container_width=True, hide_index=False)
 
-# Use Eastern Time (ET) for page header
-now_et = datetime.now(ET_ZONE)
-today_display = now_et.strftime("%A, %B %d, %Y")
-last_refreshed_time = now_et.strftime("%I:%M:%S %p ET")
-scan_timestamp_str = (
-    scan_time.strftime("%b %d, %Y — %I:%M %p ET")
-    if scan_time
-    else "Awaiting scan"
-)
+      st.download_button(
+          label="📥 Export Filtered Results (CSV)",
+          data=filtered_df.to_csv(index=False).encode("utf-8"),
+          file_name="trendnorth_filtered.csv",
+          mime="text/csv",
+      )
 
-st.markdown(
-    f"""
-    <div style="color: #64748b; font-size: 13px; margin-top: -12px; margin-bottom: 20px;">
-        <b>Date:</b> {today_display} &nbsp;|&nbsp; 
-        <b>Last Refreshed:</b> {last_refreshed_time} &nbsp;|&nbsp; 
-        <b>Engine Scan Data:</b> {scan_timestamp_str}
-    </div>
-    """,
-    unsafe_allow_html=True,
-)
+  with tab_charts:
+    if not filtered_df.empty:
+      chart_col1, chart_col2 = st.columns(2)
 
-# KPI Metric Cards
-total_tracked = len(df_raw) if not df_raw.empty else 0
-displayed_count = len(filtered_df)
-
-col_m1, col_m2, col_m3, col_m4 = st.columns(4)
-
-with col_m1:
-  st.metric("Watchlist Displayed", f"{displayed_count} / {total_tracked}")
-
-with col_m2:
-  buy_count = (
-      len(df_raw[df_raw["Signal"] == "BUY / ACCUMULATE"])
-      if not df_raw.empty and "Signal" in df_raw.columns
-      else 0
-  )
-  st.metric("🟢 Buy / Accumulate", buy_count)
-
-with col_m3:
-  sell_count = (
-      len(df_raw[df_raw["Signal"] == "SELL / EXIT"])
-      if not df_raw.empty and "Signal" in df_raw.columns
-      else 0
-  )
-  st.metric("🔴 Sell / Exit", sell_count)
-
-with col_m4:
-  trim_count = (
-      len(df_raw[df_raw["Signal"] == "TRIM / TAKE PROFIT"])
-      if not df_raw.empty and "Signal" in df_raw.columns
-      else 0
-  )
-  st.metric("🟡 Trim / Profit", trim_count)
-
-# Navigation Tabs
-tab_table, tab_charts, tab_manual = st.tabs(
-    ["📋 Filtered Watchlist", "📊 Market Technicals", "📖 User Manual"]
-)
-
-# ---------------------------------------------------------
-# Tab 1: Filtered Watchlist Table
-# ---------------------------------------------------------
-with tab_table:
-  if filtered_df.empty:
-    st.warning("No TSX assets match the current filter selection.")
-  else:
-    possible_cols = [
-        "Symbol",
-        "Ticker",
-        "Company",
-        "Price",
-        "Signal",
-        "RSI_14",
-        "SMA_50",
-        "SMA_200",
-        "Rationale",
-    ]
-    cols = [c for c in possible_cols if c in filtered_df.columns]
-    display_table = filtered_df[cols].copy()
-
-    format_dict = {}
-    if "Price" in display_table.columns:
-      format_dict["Price"] = "${:.2f}"
-    if "SMA_50" in display_table.columns:
-      format_dict["SMA_50"] = "${:.2f}"
-    if "SMA_200" in display_table.columns:
-      format_dict["SMA_200"] = "${:.2f}"
-    if "RSI_14" in display_table.columns:
-      format_dict["RSI_14"] = "{:.1f}"
-
-    st.dataframe(
-        display_table.style.format(format_dict),
-        use_container_width=True,
-        height=500,
-    )
-
-    csv_download = display_table.to_csv(index=False).encode("utf-8")
-    st.download_button(
-        label="📥 Export Filtered Watchlist (CSV)",
-        data=csv_download,
-        file_name=f"trendnorth_watchlist_{datetime.now(ET_ZONE).strftime('%Y%m%d')}.csv",
-        mime="text/csv",
-    )
-
-# ---------------------------------------------------------
-# Tab 2: Market Technicals Charts
-# ---------------------------------------------------------
-with tab_charts:
-  if df_raw.empty:
-    st.info("Market data will populate once the first screener scan completes.")
-  else:
-    c_left, c_right = st.columns(2)
-
-    with c_left:
-      st.subheader("RSI Momentum Distribution")
-      if "RSI_14" in df_raw.columns:
+      with chart_col1:
+        st.subheader("RSI Momentum Distribution")
         fig_rsi = px.histogram(
-            df_raw.dropna(subset=["RSI_14"]),
+            filtered_df,
             x="RSI_14",
-            color="Signal" if "Signal" in df_raw.columns else None,
-            nbins=20,
+            nbins=18,
+            color="Signal",
             color_discrete_map={
-                "BUY / ACCUMULATE": "#10b981",
+                "BUY / ACCUMULATE": "#16a34a",
                 "SELL / EXIT": "#ef4444",
                 "TRIM / TAKE PROFIT": "#f59e0b",
                 "KEEP / HOLD": "#64748b",
             },
-            labels={"RSI_14": "14-Day RSI", "count": "Stock Count"},
+            template="plotly_white",
         )
         fig_rsi.add_vline(
             x=40,
-            line_dash="dash",
-            line_color="#10b981",
-            annotation_text="Pullback Dip (40)",
-            annotation_position="top left",
+            line_dash="dot",
+            line_color="green",
+            annotation_text="Pullback (<=40)",
         )
         fig_rsi.add_vline(
             x=75,
-            line_dash="dash",
-            line_color="#ef4444",
-            annotation_text="Overextended (75)",
-            annotation_position="top right",
+            line_dash="dot",
+            line_color="red",
+            annotation_text="Overbought (>=75)",
         )
         fig_rsi.update_layout(
-            template="plotly_dark",
-            margin=dict(l=20, r=20, t=30, b=20),
-            legend=dict(
-                orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1
-            ),
+            xaxis_title="14-Day RSI", yaxis_title="Equities Count", height=430
         )
         st.plotly_chart(fig_rsi, use_container_width=True)
-      else:
-        st.info("RSI_14 column not found.")
 
-    with c_right:
-      st.subheader("Price vs. 50-Day Moving Average")
-      try:
-        scatter_df = df_raw.dropna(subset=["SMA_50", "Price"]).copy()
+      with chart_col2:
+        st.subheader("Price vs. 50-Day Moving Average")
+        hover_data = (
+            {"Company": True, "RSI_14": True}
+            if "Company" in filtered_df.columns
+            else {"RSI_14": True}
+        )
+        fig_spread = px.scatter(
+            filtered_df,
+            x="SMA_50",
+            y="Price",
+            hover_name="Symbol",
+            hover_data=hover_data,
+            color="Signal",
+            color_discrete_map={
+                "BUY / ACCUMULATE": "#16a34a",
+                "SELL / EXIT": "#ef4444",
+                "TRIM / TAKE PROFIT": "#f59e0b",
+                "KEEP / HOLD": "#64748b",
+            },
+            template="plotly_white",
+        )
+        fig_spread.update_layout(
+            xaxis_title="50-Day SMA (CAD)",
+            yaxis_title="Current Price (CAD)",
+            height=430,
+        )
+        st.plotly_chart(fig_spread, use_container_width=True)
 
-        if not scatter_df.empty:
-          hover_candidates = ["Company", "Company Name", "RSI_14"]
-          active_hover = [c for c in hover_candidates if c in scatter_df.columns]
-
-          fig_scatter = px.scatter(
-              scatter_df,
-              x="SMA_50",
-              y="Price",
-              color="Signal" if "Signal" in scatter_df.columns else None,
-              hover_name=symbol_col,
-              hover_data=active_hover if active_hover else None,
-              color_discrete_map={
-                  "BUY / ACCUMULATE": "#10b981",
-                  "SELL / EXIT": "#ef4444",
-                  "TRIM / TAKE PROFIT": "#f59e0b",
-                  "KEEP / HOLD": "#64748b",
-              },
-              labels={"SMA_50": "50-Day SMA (CAD)", "Price": "Price (CAD)"},
-          )
-          fig_scatter.update_layout(
-              template="plotly_dark",
-              margin=dict(l=20, r=20, t=30, b=20),
-              legend=dict(
-                  orientation="h",
-                  yanchor="bottom",
-                  y=1.02,
-                  xanchor="right",
-                  x=1,
-              ),
-          )
-          st.plotly_chart(fig_scatter, use_container_width=True)
-        else:
-          st.info("Insufficient numeric data to render the scatter chart.")
-      except Exception as e:
-        st.warning(f"Could not render scatter chart: {e}")
-
-# ---------------------------------------------------------
-# Tab 3: User Manual & Documentation
-# ---------------------------------------------------------
-with tab_manual:
-  st.markdown("### 📖 TrendNorth Operational & Technical Manual")
-
-  with st.expander("1. Introduction to TrendNorth", expanded=True):
-    st.markdown(
-        """
-            **TrendNorth** is an automated quantitative screening engine and momentum dashboard designed specifically for high-liquidity assets listed on the **Toronto Stock Exchange (TSX)**.
+  with tab_manual:
+    st.markdown("""
+        ### 📖 TrendNorth Operational Manual & Documentation
+        
+        #### 1. Introduction
+        TrendNorth is an automated quantitative screening dashboard tracking large-cap Canadian equities and core ETFs listed on the Toronto Stock Exchange (TSX). It computes institutional-grade momentum and moving average indicators to systematically highlight actionable swing trading opportunities.
+        
+        #### 2. What Business Problem Does TrendNorth Solve?
+        Individual Canadian retail investors often suffer from **market noise, emotional bias, and screen fatigue**. 
+        * Most mainstream screeners are heavily US-centric and flood users with thousands of speculative penny stocks.
+        * TrendNorth isolates **59 highly liquid TSX sector leaders and core index ETFs**, applying deterministic technical rules to clearly distinguish between pullbacks worth accumulating versus structural breakdowns worth exiting.
+        
+        #### 3. Technical Indicator Definitions
+        * **14-Day RSI (Relative Strength Index):** Momentum oscillator bounded between 0 and 100.
+            * $\mathbf{\le 40}$ **(Oversold / Dip):** Highlights a pullback during a strong broader trend.
+            * $\mathbf{\ge 75}$ **(Overbought):** Indicates overextended short-term momentum where trimming profits is prudent.
+        * **50-Day SMA (Simple Moving Average):** Medium-term baseline trend (~10 weeks of trading).
+        * **200-Day SMA:** Long-term institutional dividing line between secular bull and bear markets (~40 weeks).
+        * **Signal Rationales:**
+            * **BUY / ACCUMULATE:** Bullish trend ($\text{SMA}_{50} > \text{SMA}_{200}$) accompanied by a temporary pullback ($\text{RSI}_{14} \le 40$).
+            * **SELL / EXIT:** Structural breakdown ($\text{SMA}_{50} < \text{SMA}_{200}$) known as a Death Cross.
+            * **TRIM / TAKE PROFIT:** Extreme overextended momentum ($\text{RSI}_{14} \ge 75$).
+            * **KEEP / HOLD:** Asset is healthy and trading within normal baseline volatility.
             
-            By computing multi-timeframe moving averages and momentum oscillators over daily closing bars, TrendNorth replaces manual chart scanning with deterministic, rule-based alerts.
-            """
-    )
+        #### 4. Refresh Frequency & Pipeline Schedule
+        * Scans run twice daily via headless serverless runners:
+            * **Morning Market Open Scan:** 10:32 AM EDT (post-opening volatility resolution).
+            * **After Market Close Scan:** 04:47 PM EDT (captures confirmed daily closing candles).
+            
+        #### 5. Data Latency & Source
+        * Market pricing data is sourced via Yahoo Finance with standard ~15-minute exchange latency. TrendNorth is engineered for daily swing and positional trend monitoring, not high-frequency intraday scalping.
+        """)
 
-  with st.expander("2. Business Problem & Solution Scope", expanded=False):
-    st.markdown(
-        """
-            * **Manual Fatigue:** Analyzing dozens of charts daily causes cognitive fatigue and missed entries. TrendNorth aggregates the entire TSX liquid core in seconds.
-            * **Emotional Bias:** Subjective trading leads to buying overextended tops or catching falling knives. TrendNorth enforces deterministic criteria.
-            * **Actionable Timeliness:** Automated GitHub Actions cron pipelines dispatch notifications directly when opportunities strike.
-            """
-    )
 
-  with st.expander("3. Indicator Definitions & Signal Logic", expanded=False):
-    st.markdown(
-        """
-            | Signal | Rationale | Criteria | Interpretation |
-            | :--- | :--- | :--- | :--- |
-            | **BUY / ACCUMULATE** | Bullish trend + Pullback dip | `SMA_50 > SMA_200` & `RSI_14 <= 40` | Structural Golden trend intact; temporary short-term dip into value. |
-            | **SELL / EXIT** | Death Cross (Bearish) | `SMA_50 < SMA_200` | Intermediate trend broken beneath long-term baseline. Risk mitigation zone. |
-            | **TRIM / TAKE PROFIT** | Overextended momentum | `RSI_14 >= 75` | Excessive buyer momentum; heightened mean-reversion risk. |
-            | **KEEP / HOLD** | Trading within baseline | Standard historical range | Asset operates within baseline volatility. No action required. |
-            """
-    )
+render_dashboard()
 
-  with st.expander("4. Pipeline Schedule & Refresh Frequency", expanded=False):
-    st.markdown(
-        """
-            * **Engine Execution:** Screened twice daily via GitHub Actions (`daily_screener.yml`):
-                * Pre-market check (~10:30 AM ET / after opening discovery settles)
-                * Post-close settlement bar (~4:45 PM ET / after MOC closing auctions)
-            * **Dashboard Cache:** Automatically pulls newly committed scan data every 60 seconds.
-            """
-    )
-
-  with st.expander("5. Data Latency & Exchange Disclaimers", expanded=False):
-    st.markdown(
-        """
-            * Market quotes are gathered via `yfinance` daily bars and subject to standard exchange delays (15–20 minutes).
-            * Calculations reflect end-of-day daily session closes rather than tick-level intra-second pricing.
-            """
-    )
-
-  with st.expander(
-      "6. Canadian Market Alternatives & Differentiation", expanded=False
-  ):
-    st.markdown(
-        """
-            | Existing Platform | TSX Coverage | Core Strengths | Limitations Solved by TrendNorth |
-            | :--- | :--- | :--- | :--- |
-            | **TradingView (TSX)** | Global & TSX | Advanced chart drawing tools | High UI complexity; alerts require paid subscription tiers. |
-            | **Barchart (Canada)** | TSX & TSXV | Pre-computed technical tables | Heavy ad density; scans thousands of illiquid micro-caps. |
-            | **TMX / Globe Investor** | TSX Core | Fundamental ratios & company news | Primarily fundamental; lacks automated technical momentum alerts. |
-            | **Finviz** | US Only | Leading visual heatmaps & screener | **Does not support Canadian equities (TSX).** |
-
-            **TrendNorth Core Advantages:**
-            1. **Curated TSX Focus:** Zero micro-cap noise—tracks only liquid blue-chips and core index ETFs (`XEQT`, `XIU`).
-            2. **Opinionated Signals:** Translates raw metrics into deterministic actions (`BUY`, `SELL`, `TRIM`).
-            3. **Decoupled Delivery:** Delivers alerts directly to your inbox so you don't have to keep the dashboard open all day.
-            """
-    )
-
-# ---------------------------------------------------------
-# Floating User Feedback Popover (Spam & Bot-Protected)
-# ---------------------------------------------------------
+# -----------------------------------------------------------------------------
+# Floating User Feedback Popover (Spam-Protected)
+# -----------------------------------------------------------------------------
+st.markdown("---")
 with st.popover("💬 Submit Feedback"):
   st.markdown("#### Send Us Feedback")
   st.caption("Help improve TrendNorth with bug reports or feature suggestions.")
 
-  # 1. Session submission check
   if st.session_state.get("feedback_sent_success", False):
     st.success("✅ Thank you! Your feedback has already been received.")
   else:
@@ -629,52 +607,37 @@ with st.popover("💬 Submit Feedback"):
         placeholder="Describe your suggestion or issue...",
     )
 
-    # 2. Invisible Honeypot Field (traps bots)
-    st.markdown(
-        """
-        <div class="hp-container">
-            <input type="text" name="honeypot_field" id="honeypot_field" autocomplete="off" tabindex="-1">
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
+    # Honeypot field (hidden from view)
     hp_bot = st.text_input(
-        "Website URL",
-        label_visibility="collapsed",
-        key="honeypot_check",
-        placeholder="Leave this empty",
+        "Leave empty", label_visibility="collapsed", key="honeypot_trap"
     )
 
     def is_valid_email(addr: str) -> bool:
-      pattern = r"^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$"
-      return bool(re.match(pattern, addr.strip()))
+      return bool(
+          re.match(r"^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$", addr.strip())
+      )
 
     if st.button("Submit Feedback", type="primary", use_container_width=True):
-      # Honeypot validation
       if hp_bot.strip():
         st.success("Thank you! Your feedback has been received.")
         st.stop()
 
-      # Text and syntax validation
       if not fb_name.strip():
-        st.error("Please provide your name.")
+        st.error("Please enter your name.")
       elif not is_valid_email(fb_email):
         st.error("Please enter a valid email address.")
       elif len(fb_message.strip().split()) < 3:
-        st.error("Please enter at least a few words describing your feedback.")
+        st.error("Please enter at least 3 words describing your feedback.")
       elif any(
           link in fb_message.lower() for link in ["http://", "https://", "www."]
       ):
-        st.error("Links and URLs are not permitted in feedback submissions.")
+        st.error("Links and URLs are not permitted in feedback.")
       else:
-        # Cooldown timer check (60 seconds)
-        last_submission = st.session_state.get("last_fb_time", 0)
-        current_epoch = time.time()
-
-        if current_epoch - last_submission < 60:
-          st.warning("Please wait a minute before sending another submission.")
+        last_time = st.session_state.get("last_fb_time", 0)
+        if time.time() - last_time < 60:
+          st.warning("Please wait a moment before submitting again.")
         else:
-          with st.spinner("Submitting feedback..."):
+          with st.spinner("Sending feedback..."):
             success = send_feedback_email(
                 sender_name=fb_name.strip(),
                 sender_email=fb_email.strip(),
@@ -683,14 +646,13 @@ with st.popover("💬 Submit Feedback"):
             )
             if success:
               st.session_state.feedback_sent_success = True
-              st.session_state.last_fb_time = current_epoch
+              st.session_state.last_fb_time = time.time()
               st.success(
-                  "Thank you! Your feedback has been sent directly to the"
-                  " development team."
+                  "Thank you! Your feedback has been sent directly to the team."
               )
               st.rerun()
             else:
               st.error(
-                  "Could not send feedback at this time. Please verify SMTP"
-                  " secrets."
+                  "Could not send feedback at this time. Please try again"
+                  " later."
               )
