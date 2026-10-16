@@ -249,12 +249,10 @@ def load_screener_results():
 # Sidebar: Filters & Configuration
 # -----------------------------------------------------------------------------
 st.sidebar.markdown(
-    """
-    <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
-        <h2 style="margin: 0; padding: 0; font-size: 1.5rem;">TrendNorth</h2>
-        <img src="https://flagcdn.com/w40/ca.png" width="24" height="12" style="border-radius: 2px;">
-    </div>
-    """,
+    """<div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+<h2 style="margin: 0; padding: 0; font-size: 1.5rem;">TrendNorth</h2>
+<img src="https://flagcdn.com/w40/ca.png" width="24" height="12" style="border-radius: 2px;">
+</div>""",
     unsafe_allow_html=True,
 )
 
@@ -317,21 +315,17 @@ def render_dashboard():
 
   df = df_raw.copy()
 
-  # Main Header with Canadian Flag
-  st.markdown(
-      """
-        <div style="display: flex; align-items: center; gap: 14px; margin-bottom: 2px;">
-            <h1 style="margin: 0; padding: 0; font-size: 2.25rem; font-weight: 700;">📈 TrendNorth</h1>
-            <img src="https://flagcdn.com/w40/ca.png" 
-                 srcset="https://flagcdn.com/w80/ca.png 2x" 
-                 width="34" 
-                 height="17" 
-                 alt="Canada" 
-                 style="border-radius: 3px; box-shadow: 0 1px 4px rgba(0,0,0,0.25); display: inline-block;">
-        </div>
-        """,
-      unsafe_allow_html=True,
-  )
+  # Main Header with Canadian Flag (flush left to prevent code block escaping)
+  header_html = """<div style="display: flex; align-items: center; gap: 14px; margin-bottom: 2px;">
+<h1 style="margin: 0; padding: 0; font-size: 2.25rem; font-weight: 700;">📈 TrendNorth</h1>
+<img src="https://flagcdn.com/w40/ca.png" 
+     srcset="https://flagcdn.com/w80/ca.png 2x" 
+     width="34" 
+     height="17" 
+     alt="Canada" 
+     style="border-radius: 3px; box-shadow: 0 1px 4px rgba(0,0,0,0.25); display: inline-block;">
+</div>"""
+  st.markdown(header_html, unsafe_allow_html=True)
 
   # Timestamps
   now_et = datetime.now(ET_ZONE)
@@ -358,38 +352,31 @@ def render_dashboard():
       else ""
   )
 
-  # Render Subtitle and Status Banner (Exact image placement)
-  st.markdown(
-      f"""
-        <div style="margin-bottom: 16px;">
-            <div style="color: #64748b; font-size: 13px; margin-top: -6px; margin-bottom: 8px;">
-                <b>Date:</b> {today_display} &nbsp;|&nbsp; 
-                <b>Last Refreshed:</b> {last_refreshed_time} &nbsp;|&nbsp; 
-                <b>Engine Scan Data:</b> {scan_timestamp_str}
-            </div>
-            <!-- TSX Status & Dual Counter Badge -->
-            <div style="display: inline-flex; align-items: center; gap: 14px; background-color: #f8fafc; border: 1px solid #e2e8f0; padding: 5px 14px; border-radius: 6px; box-shadow: 0 1px 2px rgba(0,0,0,0.02);">
-                <div style="display: flex; align-items: center; gap: 6px;">
-                    <span style="height: 10px; width: 10px; background-color: {status_color}; border-radius: 50%; display: inline-block;"></span>
-                    <span style="font-weight: 700; font-size: 13px; color: #1e293b;">TSX Status:</span>
-                    <span style="font-weight: 800; font-size: 13px; color: {status_color};">{tsx_status}</span>
-                    {reason_badge}
-                </div>
-                <div style="color: #cbd5e1; font-weight: 300;">|</div>
-                <div style="display: flex; align-items: center; gap: 6px;">
-                    <span style="font-size: 12px; color: #64748b; font-weight: 600;">Counter (Elapsed):</span>
-                    <span style="font-family: 'Courier New', Courier, monospace; font-size: 13px; font-weight: 700; color: #0f172a; background-color: #ffffff; padding: 1px 6px; border-radius: 4px; border: 1px solid #e2e8f0;">{session_counter}</span>
-                </div>
-                <div style="color: #cbd5e1; font-weight: 300;">|</div>
-                <div style="display: flex; align-items: center; gap: 6px;">
-                    <span style="font-size: 12px; color: #64748b; font-weight: 600;">Time to Close:</span>
-                    <span style="font-family: 'Courier New', Courier, monospace; font-size: 13px; font-weight: 700; color: #0f172a; background-color: #ffffff; padding: 1px 6px; border-radius: 4px; border: 1px solid #e2e8f0;">{remaining_counter}</span>
-                </div>
-            </div>
-        </div>
-        """,
-      unsafe_allow_html=True,
-  )
+  # Status Banner HTML (strictly flush left to eliminate markdown code indentation issues)
+  status_banner_html = f"""<div style="margin-bottom: 16px;">
+<div style="color: #64748b; font-size: 13px; margin-top: -6px; margin-bottom: 8px;">
+<b>Date:</b> {today_display} &nbsp;|&nbsp; <b>Last Refreshed:</b> {last_refreshed_time} &nbsp;|&nbsp; <b>Engine Scan Data:</b> {scan_timestamp_str}
+</div>
+<div style="display: inline-flex; align-items: center; gap: 14px; background-color: #f8fafc; border: 1px solid #e2e8f0; padding: 5px 14px; border-radius: 6px; box-shadow: 0 1px 2px rgba(0,0,0,0.02);">
+<div style="display: flex; align-items: center; gap: 6px;">
+<span style="height: 10px; width: 10px; background-color: {status_color}; border-radius: 50%; display: inline-block;"></span>
+<span style="font-weight: 700; font-size: 13px; color: #1e293b;">TSX Status:</span>
+<span style="font-weight: 800; font-size: 13px; color: {status_color};">{tsx_status}</span>
+{reason_badge}
+</div>
+<div style="color: #cbd5e1; font-weight: 300;">|</div>
+<div style="display: flex; align-items: center; gap: 6px;">
+<span style="font-size: 12px; color: #64748b; font-weight: 600;">Counter (Elapsed):</span>
+<span style="font-family: 'Courier New', Courier, monospace; font-size: 13px; font-weight: 700; color: #0f172a; background-color: #ffffff; padding: 1px 6px; border-radius: 4px; border: 1px solid #e2e8f0;">{session_counter}</span>
+</div>
+<div style="color: #cbd5e1; font-weight: 300;">|</div>
+<div style="display: flex; align-items: center; gap: 6px;">
+<span style="font-size: 12px; color: #64748b; font-weight: 600;">Time to Close:</span>
+<span style="font-family: 'Courier New', Courier, monospace; font-size: 13px; font-weight: 700; color: #0f172a; background-color: #ffffff; padding: 1px 6px; border-radius: 4px; border: 1px solid #e2e8f0;">{remaining_counter}</span>
+</div>
+</div>
+</div>"""
+  st.markdown(status_banner_html, unsafe_allow_html=True)
 
   # Filter Data
   filtered_df = df[df["Signal"].isin(selected_signals)]
