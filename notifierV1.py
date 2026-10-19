@@ -4,71 +4,78 @@ import traceback
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 
-# Safeguard dotenv import so container environments without local .env don't crash
 try:
-    from dotenv import load_dotenv
-    load_dotenv()
+  from dotenv import load_dotenv
+
+  load_dotenv()
 except ImportError:
-    pass
+  pass
 
 
 def _get_credential(key: str, default: str = "") -> str:
-    """
-    Safely retrieves credentials across:
-    1. Streamlit Cloud Secrets (st.secrets) - checked first and cast strictly to clean strings
-    2. System/local environment variables (.env / GitHub Actions)
-    """
-    try:
-        import streamlit as st
-        if hasattr(st, "secrets") and key in st.secrets:
-            val = str(st.secrets[key]).strip()
-            if val:
-                return val
-    except Exception:
-        pass
+  """Safely retrieves credentials from st.secrets first, then os.getenv."""
+  try:
+    import streamlit as st
 
-    env_val = os.getenv(key, default)
-    return str(env_val).strip() if env_val else ""
+    if hasattr(st, "secrets") and key in st.secrets:
+      val = str(st.secrets[key]).strip()
+      if val:
+        return val
+  except Exception:
+    pass
+
+  env_val = os.getenv(key, default)
+  return str(env_val).strip() if env_val else ""
 
 
-def send_stock_email(subject: str, html_body: str, recipient: str = None) -> bool:
-    """Dispatches an HTML email alert via Gmail SMTP SSL."""
-    gmail_user = _get_credential("EMAIL_SENDER") or _get_credential("GMAIL_USER")
-    gmail_password = _get_credential("EMAIL_PASSWORD") or _get_credential("GMAIL_APP_PASSWORD")
-    recipient_email = (
-        recipient
-        or _get_credential("EMAIL_RECEIVER")
-        or _get_credential("RECIPIENT_EMAIL")
-        or gmail_user
-    )
+def send_stock_email(
+    subject: str, html_body: str, recipient: str = None
+) -> bool:
+  """Dispatches an HTML email alert via Gmail SMTP using STARTTLS (port 587)."""
+  gmail_user = _get_credential("EMAIL_SENDER") or _get_credential("GMAIL_USER")
+  gmail_password = _get_credential("EMAIL_PASSWORD") or _get_credential(
+      "GMAIL_APP_PASSWORD"
+  )
+  recipient_email = (
+      recipient
+      or _get_credential("EMAIL_RECEIVER")
+      or _get_credential("RECIPIENT_EMAIL")
+      or gmail_user
+  )
 
-    if not gmail_user or not gmail_password:
-        print("⚠️ Email notification skipped: Missing EMAIL_SENDER/GMAIL_USER or EMAIL_PASSWORD/GMAIL_APP_PASSWORD.")
-        return False
+  if not gmail_user or not gmail_password:
+    print("⚠️ Email notification skipped: Missing credentials.")
+    return False
 
-    msg = MIMEMultipart("alternative")
-    msg["Subject"] = subject
-    msg["From"] = f"TrendNorth Alerts <{gmail_user}>"
-    msg["To"] = recipient_email
-    msg.attach(MIMEText(html_body, "html"))
+  msg = MIMEMultipart("alternative")
+  msg["Subject"] = subject
+  msg["From"] = f"TrendNorth Alerts <{gmail_user}>"
+  msg["To"] = recipient_email
+  msg.attach(MIMEText(html_body, "html"))
 
-    try:
-        with smtplib.SMTP_SSL("smtp.gmail.com", 465, timeout=15) as server:
-            server.login(gmail_user, gmail_password)
-            server.sendmail(gmail_user, recipient_email, msg.as_string())
-        print(f"📧 Alert email sent successfully to {recipient_email}")
-        return True
-    except Exception as e:
-        print(f"❌ Failed to dispatch email alert: {e}")
-        traceback.print_exc()
-        return False
+  try:
+    # Use port 587 with explicit STARTTLS for maximum cloud compatibility
+    with smtplib.SMTP("smtp.gmail.com", 587, timeout=20) as server:
+      server.ehlo()
+      server.starttls()
+      server.ehlo()
+      server.login(gmail_user, gmail_password)
+      server.sendmail(gmail_user, recipient_email, msg.as_string())
+    print(f"📧 Alert email sent successfully to {recipient_email}")
+    return True
+  except Exception as e:
+    print(f"❌ Failed to dispatch email alert: {e}")
+    traceback.print_exc()
+    return False
 
 
-def send_feedback_email(sender_name: str, sender_email: str, sentiment: str, message: str) -> bool:
-    """Formats and routes user feedback from the Streamlit UI directly to your inbox."""
-    subject = f"💬 TrendNorth Feedback: [{sentiment.upper()}] from {sender_name}"
+def send_feedback_email(
+    sender_name: str, sender_email: str, sentiment: str, message: str
+) -> bool:
+  """Formats and routes user feedback from the Streamlit UI directly to your inbox."""
+  subject = f"💬 TrendNorth Feedback: [{sentiment.upper()}] from {sender_name}"
 
-    html_content = f"""
+  html_content = f"""
     <html>
     <body style="font-family: Arial, sans-serif; color: #222; line-height: 1.5;">
         <div style="background-color: #0b1f3a; padding: 16px; border-radius: 8px 8px 0 0; color: #ffffff;">
@@ -86,12 +93,12 @@ def send_feedback_email(sender_name: str, sender_email: str, sentiment: str, mes
     </body>
     </html>
     """
-    return send_stock_email(subject=subject, html_body=html_content)
+  return send_stock_email(subject=subject, html_body=html_content)
 
 
 if __name__ == "__main__":
-    test_html = """
+  test_html = """
     <h2>📈 TrendNorth Test Alert</h2>
     <p>SMTP notification verified successfully from your project environment.</p>
     """
-    send_stock_email("TrendNorth Notification Test", test_html)
+  send_stock_email("TrendNorth Notification Test", test_html)
