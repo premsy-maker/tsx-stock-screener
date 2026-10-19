@@ -5,3 +5,4 @@ yfinance
 tabulate
 requests
 python-dotenv
+streamlit-local-storage
