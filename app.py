@@ -22,7 +22,9 @@ except ImportError:
 # Configuration & Timezones
 # -----------------------------------------------------------------------------
 ET_ZONE = ZoneInfo("America/Toronto")
-CSV_FILE = "screener_results.csv"
+#CSV_FILE = "screener_results.csv"
+LOCAL_CSV_FILE = "screener_results.csv"
+DATA_BRANCH_URL = "https://raw.githubusercontent.com/premsy-maker/tsx-stock-screener/data/screener_results.csv"
 
 st.set_page_config(
     page_title="TrendNorth | TSX Momentum Screener",
@@ -204,21 +206,76 @@ def get_tsx_market_status(now_et: datetime):
     )
 
 
+# # -----------------------------------------------------------------------------
+# # Data Loader
+# # -----------------------------------------------------------------------------
+# @st.cache_data(ttl=60)
+# def load_screener_results():
+#   if not os.path.exists(CSV_FILE):
+#     return pd.DataFrame(), None
+
+#   try:
+#     raw_mtime = os.path.getmtime(CSV_FILE)
+#     mod_time = datetime.fromtimestamp(raw_mtime, tz=ZoneInfo("UTC")).astimezone(
+#         ET_ZONE
+#     )
+#     df = pd.read_csv(CSV_FILE)
+
+#     # Standardize Symbol / Ticker column
+#     if "Symbol" not in df.columns and "Ticker" in df.columns:
+#       df.rename(columns={"Ticker": "Symbol"}, inplace=True)
+
+#     if "Company" not in df.columns and "Symbol" in df.columns:
+#       df["Company"] = df["Symbol"].map(
+#           lambda s: COMPANY_NAMES.get(str(s).strip(), "—")
+#       )
+
+#     for col in ["Price", "RSI_14", "SMA_50", "SMA_200"]:
+#       if col in df.columns:
+#         df[col] = (
+#             df[col]
+#             .astype(str)
+#             .str.replace("$", "", regex=False)
+#             .str.replace(",", "", regex=False)
+#             .str.strip()
+#         )
+#         df[col] = pd.to_numeric(df[col], errors="coerce")
+
+#     return df, mod_time
+#   except Exception as e:
+#     st.error(f"Error loading screener data: {e}")
+#     return pd.DataFrame(), None
 # -----------------------------------------------------------------------------
-# Data Loader
+# Data Loader (TN-008: Decoupled Data Branch with Local Fallback)
 # -----------------------------------------------------------------------------
-@st.cache_data(ttl=60)
+@st.cache_data(ttl=120)
 def load_screener_results():
-  if not os.path.exists(CSV_FILE):
+  """Loads screener results directly from the GitHub 'data' branch with local fallback."""
+  df = None
+  mod_time = None
+
+  # 1. Try pulling fresh data from remote 'data' branch URL
+  try:
+    df = pd.read_csv(DATA_BRANCH_URL)
+    mod_time = datetime.now(ET_ZONE)
+  except Exception:
+    pass
+
+  # 2. Fallback to local CSV if offline or if remote data branch is not reachable
+  if df is None and os.path.exists(LOCAL_CSV_FILE):
+    try:
+      raw_mtime = os.path.getmtime(LOCAL_CSV_FILE)
+      mod_time = datetime.fromtimestamp(
+          raw_mtime, tz=ZoneInfo("UTC")
+      ).astimezone(ET_ZONE)
+      df = pd.read_csv(LOCAL_CSV_FILE)
+    except Exception:
+      pass
+
+  if df is None:
     return pd.DataFrame(), None
 
   try:
-    raw_mtime = os.path.getmtime(CSV_FILE)
-    mod_time = datetime.fromtimestamp(raw_mtime, tz=ZoneInfo("UTC")).astimezone(
-        ET_ZONE
-    )
-    df = pd.read_csv(CSV_FILE)
-
     # Standardize Symbol / Ticker column
     if "Symbol" not in df.columns and "Ticker" in df.columns:
       df.rename(columns={"Ticker": "Symbol"}, inplace=True)
@@ -241,9 +298,8 @@ def load_screener_results():
 
     return df, mod_time
   except Exception as e:
-    st.error(f"Error loading screener data: {e}")
+    st.error(f"Error processing screener data: {e}")
     return pd.DataFrame(), None
-
 
 # -----------------------------------------------------------------------------
 # Sidebar: Filters & Configuration
@@ -306,10 +362,16 @@ st.sidebar.caption(
 def render_dashboard():
   df_raw, scan_time = load_screener_results()
 
+  # if df_raw is None or df_raw.empty:
+  #   st.warning(
+  #       f"Waiting for `{CSV_FILE}`... Run `python ScreenStocksV1.py` to"
+  #       " generate initial scan results."
+  #   )
+  #   return
   if df_raw is None or df_raw.empty:
     st.warning(
-        f"Waiting for `{CSV_FILE}`... Run `python ScreenStocksV1.py` to"
-        " generate initial scan results."
+        "Waiting for scan data... Run `python ScreenStocksV1.py` locally or"
+        " trigger the GitHub Actions workflow."
     )
     return
 
