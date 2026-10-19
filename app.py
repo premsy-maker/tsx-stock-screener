@@ -217,19 +217,28 @@ def get_tsx_market_status(now_et: datetime):
         return ("CLOSED", "#ef4444", "00:00:00", "--:--:--", "Outside Regular Hours")
 
 # -----------------------------------------------------------------------------
-# Data Loader (TN-008 Decoupled Remote Data Branch with Local Fallback)
+# Data Loader (Cache-Busting Remote GitHub 'data' Branch + Local Fallback)
 # -----------------------------------------------------------------------------
-@st.cache_data(ttl=120)
+@st.cache_data(ttl=60)
 def load_screener_results():
     df = None
     mod_time = None
 
+    # Append a cache-buster query parameter to force GitHub's CDN to return the latest commit
+    cache_buster_url = f"{DATA_BRANCH_URL}?nocache={int(time.time())}"
+
+    # 1. Primary: Fetch fresh CSV from remote 'data' branch
     try:
-        df = pd.read_csv(DATA_BRANCH_URL)
+        df = pd.read_csv(cache_buster_url)
         mod_time = datetime.now(ET_ZONE)
     except Exception:
-        pass
+        try:
+            df = pd.read_csv(DATA_BRANCH_URL)
+            mod_time = datetime.now(ET_ZONE)
+        except Exception:
+            pass
 
+    # 2. Secondary: Fallback to local file only if remote is unreachable
     if df is None and os.path.exists(LOCAL_CSV_FILE):
         try:
             raw_mtime = os.path.getmtime(LOCAL_CSV_FILE)
@@ -242,12 +251,28 @@ def load_screener_results():
         return pd.DataFrame(), None
 
     try:
+        # Standardize Symbol & Company columns
         if "Symbol" not in df.columns and "Ticker" in df.columns:
             df.rename(columns={"Ticker": "Symbol"}, inplace=True)
 
         if "Company" not in df.columns and "Symbol" in df.columns:
             df["Company"] = df["Symbol"].map(lambda s: COMPANY_NAMES.get(str(s).strip(), "—"))
 
+        # If the CSV has an embedded Scan_Date or Timestamp column, prioritize that
+        for date_col_candidate in ["Scan_Date", "Scan Date", "Date", "Scan_Timestamp", "Timestamp"]:
+            if date_col_candidate in df.columns:
+                try:
+                    first_val = str(df[date_col_candidate].dropna().iloc[0]).strip()
+                    parsed_dt = pd.to_datetime(first_val)
+                    if parsed_dt.tzinfo is None:
+                        mod_time = parsed_dt.replace(tzinfo=ET_ZONE)
+                    else:
+                        mod_time = parsed_dt.astimezone(ET_ZONE)
+                    break
+                except Exception:
+                    pass
+
+        # Clean numerical currency/metrics columns
         for col in ["Price", "RSI_14", "SMA_50", "SMA_200"]:
             if col in df.columns:
                 df[col] = df[col].astype(str).str.replace("$", "", regex=False).str.replace(",", "", regex=False).str.strip()
@@ -347,7 +372,7 @@ def render_dashboard():
 
     df = df_raw.copy()
 
-    # Striking Main Header with Tight Canadian Flag Alignment
+    # Main Header with Tight Canadian Flag Alignment
     header_html = """<div style="display: flex; align-items: center; gap: 8px; margin-bottom: 2px;">
 <span style="font-size: 2.25rem; font-weight: 800; color: #0f172a; letter-spacing: -0.6px; line-height: 1.1;">📈 TrendNorth</span>
 <img src="https://flagcdn.com/w80/ca.png" 
@@ -458,10 +483,9 @@ def render_dashboard():
             )
 
     # -------------------------------------------------------------------------
-    # TAB 2: Pocket Trader (Option 1 Header with Right-Side Notice Card)
+    # TAB 2: Pocket Trader (Two-Column Compact Header with Auto-Save Notice)
     # -------------------------------------------------------------------------
     with tab_pocket:
-        # Side-by-side header: title on the left, compact notice card on the right
         hdr_col, notice_col = st.columns([3, 2])
 
         with hdr_col:
@@ -702,7 +726,7 @@ def render_dashboard():
                         st.rerun()
 
             # -----------------------------------------------------------------
-            # 4. OPTION B: Quick Edit Drawer for Strategy & Corrections
+            # 4. Quick Edit Drawer for Strategy & Corrections
             # -----------------------------------------------------------------
             with st.expander("✏️ Quick Edit Existing Position", expanded=False):
                 st.caption("Safely modify shares, buy price, purchase date, or profit targets without removing the position.")
@@ -742,7 +766,7 @@ def render_dashboard():
                     st.rerun()
 
         # ---------------------------------------------------------------------
-        # 5. UNCONDITIONAL Portfolio Backup & Restore (Always Visible & Merging)
+        # 5. Portfolio Backup & Restore (Always Visible & Merging)
         # ---------------------------------------------------------------------
         st.markdown("---")
         st.markdown("##### 📁 Portfolio Backup & Restore")
