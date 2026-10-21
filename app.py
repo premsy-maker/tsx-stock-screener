@@ -17,13 +17,13 @@ except ImportError:
     def send_feedback_email(sender_name: str, sender_email: str, sentiment: str, message: str) -> bool:
         return False
 
-# Optional LocalStorage integration for Pocket Trader auto-persistence
+# Browser LocalStorage integration for Pocket Trader auto-persistence
 try:
     from streamlit_local_storage import LocalStorage
-    storage = LocalStorage()
+    localS = LocalStorage()
     HAS_LOCAL_STORAGE = True
 except ImportError:
-    storage = None
+    localS = None
     HAS_LOCAL_STORAGE = False
 
 # -----------------------------------------------------------------------------
@@ -114,19 +114,10 @@ def get_tsx_market_status():
     open_time = dtime(9, 30)
     close_time = dtime(16, 0)
 
-    # 2026 TSX Observed Holidays (Mon-Fri)
     tsx_holidays_2026 = {
-        date(2026, 1, 1),
-        date(2026, 2, 16),
-        date(2026, 4, 3),
-        date(2026, 5, 18),
-        date(2026, 7, 1),
-        date(2026, 8, 3),
-        date(2026, 9, 7),
-        date(2026, 9, 30),
-        date(2026, 10, 12),
-        date(2026, 12, 25),
-        date(2026, 12, 28),
+        date(2026, 1, 1), date(2026, 2, 16), date(2026, 4, 3), date(2026, 5, 18),
+        date(2026, 7, 1), date(2026, 8, 3), date(2026, 9, 7), date(2026, 9, 30),
+        date(2026, 10, 12), date(2026, 12, 25), date(2026, 12, 28),
     }
 
     if weekday >= 5 or now_et.date() in tsx_holidays_2026:
@@ -161,7 +152,6 @@ def get_tsx_market_status():
 # -----------------------------------------------------------------------------
 @st.cache_data(ttl=60)
 def load_screener_results():
-    """Loads screener results directly from GitHub 'data' branch with cache-busting."""
     df = None
     mod_time = None
     fetch_error = None
@@ -173,7 +163,6 @@ def load_screener_results():
         "Pragma": "no-cache",
     }
 
-    # If personal token configured in st.secrets, inject it for private repos
     if "GITHUB_TOKEN" in st.secrets:
         headers["Authorization"] = f"token {st.secrets['GITHUB_TOKEN']}"
 
@@ -187,7 +176,6 @@ def load_screener_results():
     except Exception as e:
         fetch_error = str(e)
 
-    # Fallback to local container CSV only if remote request fails
     if df is None and os.path.exists(LOCAL_CSV_FILE):
         try:
             raw_mtime = os.path.getmtime(LOCAL_CSV_FILE)
@@ -225,32 +213,44 @@ def load_screener_results():
         return pd.DataFrame(), None
 
 # -----------------------------------------------------------------------------
-# Pocket Trader State Initialization & Helpers
+# Pocket Trader State Management & Helpers
 # -----------------------------------------------------------------------------
 if "pocket_positions" not in st.session_state:
     st.session_state.pocket_positions = []
 
-def sync_pocket_to_local_storage():
-    """Syncs state to browser localStorage if available."""
-    if HAS_LOCAL_STORAGE and storage is not None:
+if "last_processed_file_id" not in st.session_state:
+    st.session_state.last_processed_file_id = None
+
+def sync_pocket_to_storage():
+    """Syncs positions to browser localStorage if available."""
+    if HAS_LOCAL_STORAGE and localS is not None:
         try:
-            storage.setItem("tn_pocket_positions", json.dumps(st.session_state.pocket_positions))
+            localS.setItem("trendnorth_pocket_positions", st.session_state.pocket_positions)
         except Exception:
             pass
 
-def hydrate_pocket_from_local_storage():
-    """Hydrates positions from browser localStorage on initial session load."""
-    if HAS_LOCAL_STORAGE and storage is not None and not st.session_state.pocket_positions:
+def hydrate_pocket_from_storage():
+    """Hydrates positions from browser localStorage on first load."""
+    if HAS_LOCAL_STORAGE and localS is not None and not st.session_state.pocket_positions:
         try:
-            stored = storage.getItem("tn_pocket_positions")
-            if stored:
-                loaded = json.loads(stored)
-                if isinstance(loaded, list):
-                    st.session_state.pocket_positions = loaded
+            stored = localS.getItem("trendnorth_pocket_positions")
+            if stored and isinstance(stored, list):
+                st.session_state.pocket_positions = stored
         except Exception:
             pass
 
-hydrate_pocket_from_local_storage()
+hydrate_pocket_from_storage()
+
+def is_exact_duplicate(existing_list, candidate):
+    """Checks if a position matches an existing row across all 5 fields."""
+    return any(
+        pos["Symbol"] == candidate["Symbol"]
+        and str(pos.get("Buy Date")) == str(candidate.get("Buy Date"))
+        and abs(float(pos.get("Buy Price", 0)) - float(candidate.get("Buy Price", 0))) < 0.001
+        and int(pos.get("Shares", 0)) == int(candidate.get("Shares", 0))
+        and abs(float(pos.get("Target Gain", 0)) - float(candidate.get("Target Gain", 0))) < 0.001
+        for pos in existing_list
+    )
 
 # -----------------------------------------------------------------------------
 # Main Application Dashboard
@@ -258,7 +258,7 @@ hydrate_pocket_from_local_storage()
 def render_dashboard():
     df_raw, scan_time = load_screener_results()
 
-    # Sidebar Header & Controls
+    # Sidebar Header & Filters
     with st.sidebar:
         st.markdown(
             """
@@ -423,10 +423,19 @@ def render_dashboard():
     # TAB 2: Pocket Trader (Portfolio & Target Execution Companion)
     # -------------------------------------------------------------------------
     with tab_pocket:
-        st.subheader("💼 Pocket Trader — Portfolio & Target Tracker")
-        st.caption("Track active positions or planned purchases against live TSX scan prices with custom target gains.")
+        col_hdr1, col_hdr2 = st.columns([3, 2])
+        with col_hdr1:
+            st.subheader("💼 Pocket Trader — Portfolio & Target Tracker")
+            st.caption("Track active positions or planned purchases against live TSX scan prices with custom target gains.")
+        with col_hdr2:
+            st.info(
+                "💾 **Browser Auto-Save Active:** Positions save locally. "
+                "Clearing browser data or switching devices resets session. "
+                "Export CSV periodically below for offline backup.",
+                icon="ℹ️"
+            )
 
-        # Batch Setup Drawer
+        # 1. Batch Position Setup Form
         with st.expander("➕ Log Single or Multiple Positions (Batch Setup)", expanded=False):
             available_symbols = sorted(list(COMPANY_NAMES.keys()))
             chosen_symbols = st.multiselect(
@@ -464,21 +473,32 @@ def render_dashboard():
                 )
 
                 if st.button("➕ Add All Selected Positions to Pocket Trader", type="primary"):
+                    added_count = 0
+                    dup_count = 0
                     for _, r in edited_staging.iterrows():
-                        st.session_state.pocket_positions.append({
+                        cand = {
                             "Symbol": str(r["Symbol"]).strip(),
                             "Buy Date": str(r["Buy Date"]),
                             "Buy Price": float(r["Buy Price"]),
                             "Shares": int(r["Shares"]),
                             "Target Gain": float(r["Target Gain ($)"]),
-                        })
-                    sync_pocket_to_local_storage()
-                    st.success(f"Added {len(edited_staging)} position(s) to Pocket Trader!")
+                        }
+                        if not is_exact_duplicate(st.session_state.pocket_positions, cand):
+                            st.session_state.pocket_positions.append(cand)
+                            added_count += 1
+                        else:
+                            dup_count += 1
+
+                    sync_pocket_to_storage()
+                    if dup_count > 0:
+                        st.warning(f"Added {added_count} position(s). Skipped {dup_count} exact duplicate(s).")
+                    else:
+                        st.success(f"Added {added_count} position(s) to Pocket Trader!")
                     st.rerun()
 
-        # Render Active Holdings Table
+        # 2. Render Active Holdings Table
         if not st.session_state.pocket_positions:
-            st.info("No active positions tracked in Pocket Trader yet. Click the setup drawer above to log your first trade.")
+            st.info("No active positions tracked in Pocket Trader yet. Add a stock using the batch form above or upload a CSV below.")
         else:
             calc_rows = []
             for i, pos in enumerate(st.session_state.pocket_positions):
@@ -524,7 +544,7 @@ def render_dashboard():
 
             port_df = pd.DataFrame(calc_rows)
 
-            # Portfolio Summary
+            # Portfolio Summary KPIs
             total_invested = port_df["Cost Basis"].sum()
             total_current = port_df["Market Value"].sum()
             total_net_pl = total_current - total_invested
@@ -560,18 +580,56 @@ def render_dashboard():
                 key="pocket_table_selection",
             )
 
+            # Bulk Removal Action Bar
             selected_rows = event.selection.rows if hasattr(event, "selection") and event.selection else []
             if selected_rows:
-                act_col1, act_col2 = st.columns([2, 8])
+                act_col1, _ = st.columns([2, 8])
                 with act_col1:
                     if st.button(f"🗑️ Remove ({len(selected_rows)}) Position(s)", type="primary"):
                         st.session_state.pocket_positions = [
                             p for idx, p in enumerate(st.session_state.pocket_positions) if idx not in selected_rows
                         ]
-                        sync_pocket_to_local_storage()
+                        sync_pocket_to_storage()
                         st.rerun()
 
-        # Backup & Restore Drawer
+            # 3. Option B: Quick Edit Drawer for Tracked Positions
+            with st.expander("✏️ Quick Edit Existing Position", expanded=False):
+                edit_options = [
+                    f"#{i} — {p['Symbol']} (Bought {p.get('Buy Date', '—')} @ ${p.get('Buy Price', 0):.2f})"
+                    for i, p in enumerate(st.session_state.pocket_positions)
+                ]
+                selected_edit_str = st.selectbox("Select position to modify:", options=edit_options)
+                if selected_edit_str:
+                    sel_idx = int(selected_edit_str.split(" — ")[0].replace("#", ""))
+                    target_pos = st.session_state.pocket_positions[sel_idx]
+
+                    e_col1, e_col2, e_col3, e_col4 = st.columns(4)
+                    with e_col1:
+                        new_shares = st.number_input("Shares", min_value=1, value=int(target_pos.get("Shares", 10)), step=1)
+                    with e_col2:
+                        try:
+                            cur_d = datetime.strptime(str(target_pos.get("Buy Date")), "%Y-%m-%d").date()
+                        except Exception:
+                            cur_d = date.today()
+                        new_date = st.date_input("Buy Date", value=cur_d)
+                    with e_col3:
+                        new_price = st.number_input("Buy Price (CAD)", min_value=0.01, value=float(target_pos.get("Buy Price", 10.0)), step=0.1)
+                    with e_col4:
+                        new_gain = st.number_input("Target Gain ($/sh)", min_value=0.1, value=float(target_pos.get("Target Gain", 10.0)), step=0.5)
+
+                    if st.button(f"💾 Save Changes to {target_pos['Symbol']}", type="primary"):
+                        st.session_state.pocket_positions[sel_idx] = {
+                            "Symbol": target_pos["Symbol"],
+                            "Buy Date": str(new_date),
+                            "Buy Price": float(new_price),
+                            "Shares": int(new_shares),
+                            "Target Gain": float(new_gain),
+                        }
+                        sync_pocket_to_storage()
+                        st.success(f"Updated {target_pos['Symbol']} successfully!")
+                        st.rerun()
+
+        # 4. Portfolio Backup & Restore (Unconditionally Available)
         st.markdown("---")
         with st.expander("📁 Portfolio Backup & Restore", expanded=False):
             b_col1, b_col2 = st.columns(2)
@@ -589,39 +647,64 @@ def render_dashboard():
                     st.button("📥 Export Portfolio CSV", disabled=True)
 
             with b_col2:
-                st.write("**Restore Portfolio from Backup:**")
-                uploaded_backup = st.file_uploader("Upload portfolio CSV", type=["csv"], label_visibility="collapsed")
+                st.write("**Restore / Merge Portfolio from Backup:**")
+                uploaded_backup = st.file_uploader(
+                    "Upload portfolio CSV",
+                    type=["csv"],
+                    label_visibility="collapsed",
+                    key="pocket_csv_uploader"
+                )
                 if uploaded_backup is not None:
-                    try:
-                        imp_df = pd.read_csv(uploaded_backup)
-                        required_cols = {"Symbol", "Buy Price", "Shares"}
-                        if required_cols.issubset(imp_df.columns):
-                            valid_rows = []
-                            skipped = []
-                            for _, row in imp_df.iterrows():
-                                sym = str(row["Symbol"]).strip().upper()
-                                if sym in COMPANY_NAMES:
-                                    valid_rows.append({
-                                        "Symbol": sym,
-                                        "Buy Date": str(row.get("Buy Date", date.today())),
-                                        "Buy Price": float(row["Buy Price"]),
-                                        "Shares": int(row["Shares"]),
-                                        "Target Gain": float(row.get("Target Gain", 10.0)),
-                                    })
-                                else:
-                                    skipped.append(sym)
-
-                            st.session_state.pocket_positions = valid_rows
-                            sync_pocket_to_local_storage()
-                            if skipped:
-                                st.warning(f"Restored {len(valid_rows)} positions. Skipped untracked symbols: {', '.join(skipped)}")
+                    # Deduplicate file upload runs across re-renders
+                    file_sig = f"{uploaded_backup.name}_{uploaded_backup.size}"
+                    if st.session_state.last_processed_file_id != file_sig:
+                        try:
+                            # Security checks: size cap (2MB) & text validation
+                            if uploaded_backup.size > 2 * 1024 * 1024:
+                                st.error("Uploaded file exceeds the 2 MB limit.")
                             else:
-                                st.success(f"Restored {len(valid_rows)} positions successfully!")
-                            st.rerun()
-                        else:
-                            st.error("Uploaded CSV is missing required headers: Symbol, Buy Price, Shares.")
-                    except Exception as err:
-                        st.error(f"Error reading CSV backup: {err}")
+                                imp_df = pd.read_csv(uploaded_backup)
+                                required_cols = {"Symbol", "Buy Price", "Shares"}
+                                if required_cols.issubset(imp_df.columns):
+                                    merged_count = 0
+                                    skipped_universe = []
+                                    skipped_duplicates = 0
+
+                                    for _, row in imp_df.iterrows():
+                                        sym = str(row["Symbol"]).strip().upper()
+                                        if sym in COMPANY_NAMES:
+                                            cand = {
+                                                "Symbol": sym,
+                                                "Buy Date": str(row.get("Buy Date", date.today())),
+                                                "Buy Price": float(row["Buy Price"]),
+                                                "Shares": int(row["Shares"]),
+                                                "Target Gain": float(row.get("Target Gain", 10.0)),
+                                            }
+                                            if not is_exact_duplicate(st.session_state.pocket_positions, cand):
+                                                st.session_state.pocket_positions.append(cand)
+                                                merged_count += 1
+                                            else:
+                                                skipped_duplicates += 1
+                                        else:
+                                            skipped_universe.append(sym)
+
+                                    st.session_state.last_processed_file_id = file_sig
+                                    sync_pocket_to_storage()
+
+                                    msg = f"Import complete: {merged_count} position(s) added."
+                                    if skipped_duplicates:
+                                        msg += f" {skipped_duplicates} duplicate(s) skipped."
+                                    if skipped_universe:
+                                        st.warning(f"{msg} The following were skipped as they are outside the 59 tracked TSX assets: {', '.join(set(skipped_universe))}")
+                                    else:
+                                        st.success(msg)
+                                    st.rerun()
+                                else:
+                                    st.error("Missing required headers: Symbol, Buy Price, Shares.")
+                        except Exception as err:
+                            st.error(f"Error parsing CSV: {err}")
+                    else:
+                        st.caption(f"ℹ️ `{uploaded_backup.name}` is already synchronized.")
 
     # -------------------------------------------------------------------------
     # TAB 3: Market Technicals
@@ -702,7 +785,8 @@ def render_dashboard():
                 """
                 * **Batch Position Logging:** Select multiple symbols from the 59 tracked assets to track lots simultaneously.
                 * **Target Gain Tracking:** Specify your profit objective (e.g., $10/share). The status badge dynamically turns into **🎯 TARGET REACHED** when prices cross above.
-                * **Privacy-First Storage:** Positions persist in browser storage and can be backed up or restored anytime via CSV files.
+                * **Quick Editing:** Use the *Quick Edit Existing Position* drawer to update shares, entry date, buy price, or target price at any time.
+                * **Privacy-First Storage:** Positions persist in browser local storage and can be exported or merged anytime via CSV files.
                 """
             )
 
