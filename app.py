@@ -40,6 +40,88 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
+# Custom UI Styling (Fintech Terminal Look & Snug Brand Alignments)
+st.markdown(
+    """
+    <style>
+    /* Global Clean Font & Spacing */
+    .block-container {
+        padding-top: 2rem !important;
+        padding-bottom: 3rem !important;
+    }
+    
+    /* Header Inline Brand Container */
+    .tn-brand-header {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        margin-bottom: 2px;
+    }
+    .tn-brand-header h1 {
+        margin: 0 !important;
+        padding: 0 !important;
+        font-size: 2.1rem !important;
+        font-weight: 800 !important;
+        color: #0f172a !important;
+        letter-spacing: -0.5px !important;
+        line-height: 1.1 !important;
+    }
+    .tn-brand-header img {
+        display: inline-block !important;
+        vertical-align: middle !important;
+        margin: 0 !important;
+    }
+    
+    /* Sub-header meta bar */
+    .tn-meta-bar {
+        font-size: 0.88rem;
+        color: #64748b;
+        margin-top: 4px;
+        margin-bottom: 14px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+    }
+    .tn-meta-bar span {
+        background: #f8fafc;
+        border: 1px solid #e2e8f0;
+        padding: 3px 8px;
+        border-radius: 6px;
+    }
+
+    /* Metric Cards */
+    div[data-testid="stMetric"] {
+        background: #ffffff;
+        border: 1px solid #e2e8f0;
+        padding: 12px 16px;
+        border-radius: 10px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.02);
+    }
+    div[data-testid="stMetricLabel"] > div {
+        font-size: 0.82rem !important;
+        font-weight: 600 !important;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        color: #64748b !important;
+    }
+    div[data-testid="stMetricValue"] > div {
+        font-size: 1.6rem !important;
+        font-weight: 800 !important;
+        color: #0f172a !important;
+    }
+
+    /* Floating Feedback Popover */
+    div[data-testid="stPopover"] {
+        position: fixed;
+        bottom: 24px;
+        right: 24px;
+        z-index: 999999;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
 # Core Watchlist Company Names Mapping (59 TSX Equities & ETFs)
 COMPANY_NAMES = {
     "XEQT.TO": "iShares Core Equity ETF Portfolio",
@@ -121,7 +203,7 @@ def get_tsx_market_status():
     }
 
     if weekday >= 5 or now_et.date() in tsx_holidays_2026:
-        return "CLOSED", "Weekend / TSX Market Holiday", "Closed", "Opens next trading day at 9:30 AM ET"
+        return "CLOSED", "Weekend / TSX Market Holiday", "Closed", "Opens next trading day 9:30 AM ET"
 
     if today_time < open_time:
         time_until = datetime.combine(now_et.date(), open_time, tzinfo=ET_ZONE) - now_et
@@ -262,9 +344,9 @@ def render_dashboard():
     with st.sidebar:
         st.markdown(
             """
-            <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 8px;">
-                <h2 style="margin: 0; padding: 0;">TrendNorth</h2>
-                <img src="https://flagcdn.com/w80/ca.png" width="34" style="margin-top: 2px;" alt="Canada Flag"/>
+            <div style="display: inline-flex; align-items: center; gap: 6px; margin-bottom: 12px;">
+                <h3 style="margin: 0; padding: 0; font-size: 1.45rem; font-weight: 800; color: #0f172a; line-height: 1;">TrendNorth</h3>
+                <img src="https://flagcdn.com/w80/ca.png" width="28" style="vertical-align: middle; border-radius: 2px;" alt="Canada Flag"/>
             </div>
             """,
             unsafe_allow_html=True,
@@ -305,22 +387,24 @@ def render_dashboard():
     today_et_str = datetime.now(ET_ZONE).strftime("%A, %B %d, %Y")
     now_time_et_str = datetime.now(ET_ZONE).strftime("%I:%M:%S %p ET")
 
+    # Snug Inline Branding (Eliminating Any Wide Margins)
     st.markdown(
         f"""
-        <div style="display: flex; align-items: baseline; gap: 8px; margin-bottom: 2px;">
-            <h1 style="margin: 0; padding: 0; font-size: 2.2rem; font-weight: 700;">📈 TrendNorth</h1>
-            <img src="https://flagcdn.com/w80/ca.png" width="36" style="margin-bottom: 2px;" alt="Canada Flag"/>
+        <div class="tn-brand-header">
+            <span style="font-size: 2.1rem; line-height: 1; vertical-align: middle;">📈</span>
+            <h1 style="display: inline; vertical-align: middle;">TrendNorth</h1>
+            <img src="https://flagcdn.com/w80/ca.png" width="34" style="vertical-align: middle; border-radius: 2px;" alt="Canada Flag"/>
         </div>
-        <p style="color: #64748b; font-size: 0.95rem; margin-top: 2px; margin-bottom: 14px;">
-            <b>Date:</b> {today_et_str} &nbsp;|&nbsp; 
-            <b>Live Clock:</b> {now_time_et_str} &nbsp;|&nbsp; 
-            <b>Engine Scan Data:</b> {scan_date_str}
-        </p>
+        <div class="tn-meta-bar">
+            <span>📅 <b>Date:</b> {today_et_str}</span>
+            <span>⏰ <b>Live Clock:</b> {now_time_et_str}</span>
+            <span>⚡ <b>Engine Scan:</b> {scan_date_str}</span>
+        </div>
         """,
         unsafe_allow_html=True,
     )
 
-    col_stat1, col_stat2, col_stat3 = st.columns([1.5, 1.2, 1.2])
+    col_stat1, col_stat2, col_stat3 = st.columns([1.6, 1.2, 1.2])
     with col_stat1:
         if status_state == "OPEN":
             st.success(f"🟢 **TSX Status:** {status_state} ({status_detail})")
@@ -357,7 +441,7 @@ def render_dashboard():
             | filtered_df["Company"].str.contains(search_query, case=False, na=False)
         ]
 
-    # Metrics Summary Bar
+    # Metrics Summary Bar (Fintech-Card Styled)
     m_col1, m_col2, m_col3, m_col4 = st.columns(4)
     with m_col1:
         st.metric("Watchlist Displayed", f"{len(filtered_df)} / {len(df_raw)}")
@@ -371,7 +455,7 @@ def render_dashboard():
         trim_cnt = len(filtered_df[filtered_df["Signal"] == "TRIM / TAKE PROFIT"])
         st.metric("🟡 Trim / Profit", trim_cnt)
 
-    st.markdown("---")
+    st.markdown("<div style='margin-top: 14px;'></div>", unsafe_allow_html=True)
 
     # Main Content Tabs
     tab_data, tab_pocket, tab_charts, tab_manual = st.tabs(
@@ -387,11 +471,11 @@ def render_dashboard():
         else:
             def signal_styler(val):
                 if "BUY" in str(val):
-                    return "color: #1b5e20; background-color: #e8f5e9; font-weight: bold;"
+                    return "color: #15803d; background-color: #f0fdf4; font-weight: 700; border-radius: 4px;"
                 elif "SELL" in str(val):
-                    return "color: #b71c1c; background-color: #ffebee; font-weight: bold;"
+                    return "color: #b91c1c; background-color: #fef2f2; font-weight: 700; border-radius: 4px;"
                 elif "TRIM" in str(val):
-                    return "color: #b45309; background-color: #fef3c7; font-weight: bold;"
+                    return "color: #b45309; background-color: #fffbeb; font-weight: 700; border-radius: 4px;"
                 return "color: #475569;"
 
             columns_order = [
@@ -544,7 +628,7 @@ def render_dashboard():
 
             port_df = pd.DataFrame(calc_rows)
 
-            # Portfolio Summary KPIs
+            # Portfolio Summary KPIs (Card Formats)
             total_invested = port_df["Cost Basis"].sum()
             total_current = port_df["Market Value"].sum()
             total_net_pl = total_current - total_invested
@@ -655,11 +739,9 @@ def render_dashboard():
                     key="pocket_csv_uploader"
                 )
                 if uploaded_backup is not None:
-                    # Deduplicate file upload runs across re-renders
                     file_sig = f"{uploaded_backup.name}_{uploaded_backup.size}"
                     if st.session_state.last_processed_file_id != file_sig:
                         try:
-                            # Security checks: size cap (2MB) & text validation
                             if uploaded_backup.size > 2 * 1024 * 1024:
                                 st.error("Uploaded file exceeds the 2 MB limit.")
                             else:
@@ -801,19 +883,6 @@ def render_dashboard():
     # -------------------------------------------------------------------------
     # Floating Feedback Popover (Bottom-Right Anchored)
     # -------------------------------------------------------------------------
-    st.markdown(
-        """
-        <style>
-        div[data-testid="stPopover"] {
-            position: fixed;
-            bottom: 24px;
-            right: 24px;
-            z-index: 999999;
-        }
-        </style>
-        """,
-        unsafe_allow_html=True,
-    )
     with st.popover("💬 Submit Feedback"):
         st.markdown("### 💬 TrendNorth Feedback")
         fb_name = st.text_input("Name (Optional)", placeholder="e.g. John Doe")
