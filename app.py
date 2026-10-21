@@ -49,45 +49,6 @@ st.markdown(
         padding-top: 2rem !important;
         padding-bottom: 3rem !important;
     }
-    
-    /* Header Inline Brand Container */
-    .tn-brand-header {
-        display: inline-flex;
-        align-items: center;
-        gap: 6px;
-        margin-bottom: 2px;
-    }
-    .tn-brand-header h1 {
-        margin: 0 !important;
-        padding: 0 !important;
-        font-size: 2.1rem !important;
-        font-weight: 800 !important;
-        color: #0f172a !important;
-        letter-spacing: -0.5px !important;
-        line-height: 1.1 !important;
-    }
-    .tn-brand-header img {
-        display: inline-block !important;
-        vertical-align: middle !important;
-        margin: 0 !important;
-    }
-    
-    /* Sub-header meta bar */
-    .tn-meta-bar {
-        font-size: 0.88rem;
-        color: #64748b;
-        margin-top: 4px;
-        margin-bottom: 14px;
-        display: flex;
-        flex-wrap: wrap;
-        gap: 12px;
-    }
-    .tn-meta-bar span {
-        background: #f8fafc;
-        border: 1px solid #e2e8f0;
-        padding: 3px 8px;
-        border-radius: 6px;
-    }
 
     /* Metric Cards */
     div[data-testid="stMetric"] {
@@ -345,8 +306,7 @@ def render_dashboard():
         st.markdown(
             """
             <div style="display: inline-flex; align-items: center; gap: 6px; margin-bottom: 12px;">
-                <h3 style="margin: 0; padding: 0; font-size: 1.45rem; font-weight: 800; color: #0f172a; line-height: 1;">TrendNorth</h3>
-                <img src="https://flagcdn.com/w80/ca.png" width="28" style="vertical-align: middle; border-radius: 2px;" alt="Canada Flag"/>
+                <h3 style="margin: 0; padding: 0; font-size: 1.45rem; font-weight: 800; color: #0f172a; line-height: 1;">TrendNorth 🇨🇦</h3>
             </div>
             """,
             unsafe_allow_html=True,
@@ -387,18 +347,14 @@ def render_dashboard():
     today_et_str = datetime.now(ET_ZONE).strftime("%A, %B %d, %Y")
     now_time_et_str = datetime.now(ET_ZONE).strftime("%I:%M:%S %p ET")
 
-    # Snug Inline Branding (Eliminating Any Wide Margins)
+    # Native Title & Snug Sub-Bar
+    st.title("📈 TrendNorth 🇨🇦")
     st.markdown(
         f"""
-        <div class="tn-brand-header">
-            <span style="font-size: 2.1rem; line-height: 1; vertical-align: middle;">📈</span>
-            <h1 style="display: inline; vertical-align: middle;">TrendNorth</h1>
-            <img src="https://flagcdn.com/w80/ca.png" width="34" style="vertical-align: middle; border-radius: 2px;" alt="Canada Flag"/>
-        </div>
-        <div class="tn-meta-bar">
-            <span>📅 <b>Date:</b> {today_et_str}</span>
-            <span>⏰ <b>Live Clock:</b> {now_time_et_str}</span>
-            <span>⚡ <b>Engine Scan:</b> {scan_date_str}</span>
+        <div style="font-size: 0.9rem; color: #64748b; margin-top: -12px; margin-bottom: 16px;">
+            <b>Date:</b> {today_et_str} &nbsp;|&nbsp; 
+            <b>Live Clock:</b> {now_time_et_str} &nbsp;|&nbsp; 
+            <b>Engine Scan Data:</b> {scan_date_str}
         </div>
         """,
         unsafe_allow_html=True,
