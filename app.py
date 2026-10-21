@@ -1,3 +1,4 @@
+import io
 import os
 import re
 import time
@@ -6,6 +7,7 @@ from datetime import date, datetime, time as dtime, timedelta
 from zoneinfo import ZoneInfo
 import pandas as pd
 import plotly.express as px
+import requests
 import streamlit as st
 
 # Import feedback sender from notifier
@@ -106,7 +108,7 @@ COMPANY_NAMES = {
 # -----------------------------------------------------------------------------
 def get_tsx_market_status():
     now_et = datetime.now(ET_ZONE)
-    weekday = now_et.weekday()  # 0=Monday, 4=Friday, 5=Sat, 6=Sun
+    weekday = now_et.weekday()
     today_time = now_et.time()
 
     open_time = dtime(9, 30)
@@ -114,17 +116,17 @@ def get_tsx_market_status():
 
     # 2026 TSX Observed Holidays (Mon-Fri)
     tsx_holidays_2026 = {
-        date(2026, 1, 1),   # New Year's Day
-        date(2026, 2, 16),  # Family Day
-        date(2026, 4, 3),   # Good Friday
-        date(2026, 5, 18),  # Victoria Day
-        date(2026, 7, 1),   # Canada Day
-        date(2026, 8, 3),   # Civic Holiday
-        date(2026, 9, 7),   # Labour Day
-        date(2026, 9, 30),  # National Day for Truth and Reconciliation
-        date(2026, 10, 12), # Thanksgiving Day
-        date(2026, 12, 25), # Christmas Day
-        date(2026, 12, 28), # Boxing Day (Observed)
+        date(2026, 1, 1),
+        date(2026, 2, 16),
+        date(2026, 4, 3),
+        date(2026, 5, 18),
+        date(2026, 7, 1),
+        date(2026, 8, 3),
+        date(2026, 9, 7),
+        date(2026, 9, 30),
+        date(2026, 10, 12),
+        date(2026, 12, 25),
+        date(2026, 12, 28),
     }
 
     if weekday >= 5 or now_et.date() in tsx_holidays_2026:
@@ -155,32 +157,44 @@ def get_tsx_market_status():
         return "CLOSED", "Market Closed (Post-Session)", "Session Ended", "Opens 9:30 AM ET next trading day"
 
 # -----------------------------------------------------------------------------
-# Resilient Data Loader with Cache-Busting (TN-008 & TN-001)
+# Resilient Data Loader with Cache-Busting & Diagnostics (TN-008 & TN-001)
 # -----------------------------------------------------------------------------
 @st.cache_data(ttl=60)
 def load_screener_results():
     """Loads screener results directly from GitHub 'data' branch with cache-busting."""
     df = None
     mod_time = None
-    
-    # 1. Fetch from GitHub data branch with cache-buster param to bypass CDN lag
-    bust_url = f"{DATA_BRANCH_URL}?t={int(time.time())}"
-    try:
-        df = pd.read_csv(bust_url)
-        mod_time = datetime.now(ET_ZONE)
-    except Exception:
-        try:
-            df = pd.read_csv(DATA_BRANCH_URL)
-            mod_time = datetime.now(ET_ZONE)
-        except Exception:
-            pass
+    fetch_error = None
 
-    # 2. Local fallback if remote request fails
+    bust_url = f"{DATA_BRANCH_URL}?t={int(time.time())}"
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) TrendNorth/1.0",
+        "Cache-Control": "no-cache",
+        "Pragma": "no-cache",
+    }
+
+    # If personal token configured in st.secrets, inject it for private repos
+    if "GITHUB_TOKEN" in st.secrets:
+        headers["Authorization"] = f"token {st.secrets['GITHUB_TOKEN']}"
+
+    try:
+        resp = requests.get(bust_url, headers=headers, timeout=10)
+        if resp.status_code == 200:
+            df = pd.read_csv(io.StringIO(resp.text))
+            mod_time = datetime.now(ET_ZONE)
+        else:
+            fetch_error = f"HTTP {resp.status_code} - {resp.reason}"
+    except Exception as e:
+        fetch_error = str(e)
+
+    # Fallback to local container CSV only if remote request fails
     if df is None and os.path.exists(LOCAL_CSV_FILE):
         try:
             raw_mtime = os.path.getmtime(LOCAL_CSV_FILE)
             mod_time = datetime.fromtimestamp(raw_mtime, tz=ZoneInfo("UTC")).astimezone(ET_ZONE)
             df = pd.read_csv(LOCAL_CSV_FILE)
+            if fetch_error:
+                st.sidebar.warning(f"⚠️ Remote fetch failed ({fetch_error}). Using local fallback.")
         except Exception:
             pass
 
@@ -188,14 +202,12 @@ def load_screener_results():
         return pd.DataFrame(), None
 
     try:
-        # Standardize Symbol / Ticker column
         if "Symbol" not in df.columns and "Ticker" in df.columns:
             df.rename(columns={"Ticker": "Symbol"}, inplace=True)
 
         if "Company" not in df.columns and "Symbol" in df.columns:
             df["Company"] = df["Symbol"].map(lambda s: COMPANY_NAMES.get(str(s).strip(), "—"))
 
-        # Clean numerical currency and oscillator fields
         for col in ["Price", "RSI_14", "SMA_50", "SMA_200"]:
             if col in df.columns:
                 df[col] = (
@@ -218,14 +230,8 @@ def load_screener_results():
 if "pocket_positions" not in st.session_state:
     st.session_state.pocket_positions = []
 
-if "pocket_edit_index" not in st.session_state:
-    st.session_state.pocket_edit_index = None
-
-if "last_uploaded_file_sig" not in st.session_state:
-    st.session_state.last_uploaded_file_sig = None
-
 def sync_pocket_to_local_storage():
-    """Syncs state to browser localStorage if package is available."""
+    """Syncs state to browser localStorage if available."""
     if HAS_LOCAL_STORAGE and storage is not None:
         try:
             storage.setItem("tn_pocket_positions", json.dumps(st.session_state.pocket_positions))
@@ -247,7 +253,7 @@ def hydrate_pocket_from_local_storage():
 hydrate_pocket_from_local_storage()
 
 # -----------------------------------------------------------------------------
-# Dashboard Rendering
+# Main Application Dashboard
 # -----------------------------------------------------------------------------
 def render_dashboard():
     df_raw, scan_time = load_screener_results()
@@ -291,9 +297,9 @@ def render_dashboard():
 
         st.markdown("---")
         st.caption("ℹ️ **Educational / Non-Financial Advice Disclaimer**")
-        st.caption("TrendNorth is an algorithmic research platform for TSX securities. All indicators and alerts are mathematical representations for self-directed educational screening and do not constitute financial advice.")
+        st.caption("TrendNorth is an algorithmic research platform for TSX securities. All indicators and alerts are mathematical representations for self-directed screening and do not constitute financial advice.")
 
-    # Top Status Banner
+    # Top Status & Session Clock Banner
     status_state, status_detail, elapsed_time, time_to_close = get_tsx_market_status()
     scan_date_str = scan_time.strftime("%b %d, %Y — %I:%M %p ET") if scan_time else "Data Pending"
     today_et_str = datetime.now(ET_ZONE).strftime("%A, %B %d, %Y")
@@ -331,7 +337,7 @@ def render_dashboard():
         st.warning("Waiting for scan data... Run the GitHub Actions workflow or execute `python ScreenStocksV1.py` locally.")
         return
 
-    # Filter Dataset for Watchlist View
+    # Watchlist Filtering
     filtered_df = df_raw.copy()
     if selected_signals:
         filtered_df = filtered_df[filtered_df["Signal"].isin(selected_signals)]
@@ -367,7 +373,7 @@ def render_dashboard():
 
     st.markdown("---")
 
-    # Navigation Tabs (Pocket Trader positioned immediately after Watchlist)
+    # Main Content Tabs
     tab_data, tab_pocket, tab_charts, tab_manual = st.tabs(
         ["📋 Filtered Watchlist", "💼 Pocket Trader", "📊 Market Technicals", "📖 User Manual"]
     )
@@ -420,7 +426,7 @@ def render_dashboard():
         st.subheader("💼 Pocket Trader — Portfolio & Target Tracker")
         st.caption("Track active positions or planned purchases against live TSX scan prices with custom target gains.")
 
-        # Batch Position Setup Form
+        # Batch Setup Drawer
         with st.expander("➕ Log Single or Multiple Positions (Batch Setup)", expanded=False):
             available_symbols = sorted(list(COMPANY_NAMES.keys()))
             chosen_symbols = st.multiselect(
@@ -481,7 +487,6 @@ def render_dashboard():
                 shares = int(pos.get("Shares", 0))
                 tgt_gain = float(pos.get("Target Gain", 10.0))
 
-                # Lookup live scan price & signal
                 cur_price = buy_p
                 sig = "—"
                 rsi = 50.0
@@ -519,7 +524,7 @@ def render_dashboard():
 
             port_df = pd.DataFrame(calc_rows)
 
-            # Portfolio Summary Banner
+            # Portfolio Summary
             total_invested = port_df["Cost Basis"].sum()
             total_current = port_df["Market Value"].sum()
             total_net_pl = total_current - total_invested
@@ -534,7 +539,6 @@ def render_dashboard():
                 delta_str = f"{total_net_pct:+.2f}%"
                 st.metric("Cumulative Net Return", f"${total_net_pl:+,.2f}", delta=delta_str)
 
-            # Interactive Holdings Table with Row Selection
             display_port = port_df[[
                 "Symbol", "Company", "Buy Date", "Buy Price", "Current Price", "Shares",
                 "Market Value", "Unrealized P&L ($)", "Return (%)", "Target Price", "Status", "Live Signal"
@@ -556,7 +560,6 @@ def render_dashboard():
                 key="pocket_table_selection",
             )
 
-            # Bulk Removal & Quick Edit Action Bar
             selected_rows = event.selection.rows if hasattr(event, "selection") and event.selection else []
             if selected_rows:
                 act_col1, act_col2 = st.columns([2, 8])
@@ -568,7 +571,7 @@ def render_dashboard():
                         sync_pocket_to_local_storage()
                         st.rerun()
 
-        # Backup & Restore Drawer (Always Accessible)
+        # Backup & Restore Drawer
         st.markdown("---")
         with st.expander("📁 Portfolio Backup & Restore", expanded=False):
             b_col1, b_col2 = st.columns(2)
