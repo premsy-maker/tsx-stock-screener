@@ -40,44 +40,72 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# Custom UI Styling (Fintech Card Buttons & Snug Spacing)
-st.markdown(
-    """
-    <style>
-    /* Global Clean Font & Spacing */
-    .block-container {
-        padding-top: 2rem !important;
-        padding-bottom: 3rem !important;
-    }
+# -----------------------------------------------------------------------------
+# Theming State & Dynamic CSS Injection (TN-019)
+# -----------------------------------------------------------------------------
+if "theme_mode" not in st.session_state:
+    st.session_state["theme_mode"] = "Dark (Terminal) 🌙"
 
-    /* Embedded KPI Metric Card Buttons */
-    div.kpi-card-container button {
+is_dark = "Dark" in st.session_state["theme_mode"]
+
+# Dynamic palette selection
+theme_bg = "#090d16" if is_dark else "#f8fafc"
+card_bg = "#131b2e" if is_dark else "#ffffff"
+card_border = "#22314e" if is_dark else "#e2e8f0"
+text_primary = "#f1f5f9" if is_dark else "#0f172a"
+text_secondary = "#94a3b8" if is_dark else "#64748b"
+plotly_theme = "plotly_dark" if is_dark else "plotly_white"
+
+st.markdown(
+    f"""
+    <style>
+    /* Global Page Styling */
+    .stApp {{
+        background-color: {theme_bg} !important;
+        color: {text_primary} !important;
+    }}
+    .block-container {{
+        padding-top: 1.8rem !important;
+        padding-bottom: 3rem !important;
+    }}
+
+    /* Sub-header meta bar */
+    .tn-meta-bar span {{
+        background: {card_bg} !important;
+        border: 1px solid {card_border} !important;
+        padding: 4px 10px;
+        border-radius: 6px;
+        color: {text_secondary} !important;
+    }}
+
+    /* Interactive Embedded KPI Metric Card Buttons */
+    div.kpi-card-container button {{
         width: 100% !important;
-        background-color: #ffffff !important;
-        border: 1px solid #e2e8f0 !important;
+        background-color: {card_bg} !important;
+        border: 1px solid {card_border} !important;
         border-radius: 10px !important;
-        padding: 14px 18px !important;
+        padding: 12px 16px !important;
         text-align: left !important;
         white-space: pre-line !important;
         line-height: 1.35 !important;
         box-shadow: 0 1px 3px rgba(0,0,0,0.02) !important;
         transition: all 0.15s ease-in-out !important;
-        min-height: 82px !important;
-    }
-    div.kpi-card-container button:hover {
-        border-color: #94a3b8 !important;
-        background-color: #f8fafc !important;
+        min-height: 84px !important;
+        color: {text_primary} !important;
+    }}
+    div.kpi-card-container button:hover {{
+        border-color: #3b82f6 !important;
         transform: translateY(-1px);
-        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05) !important;
-    }
+        box-shadow: 0 4px 12px rgba(59, 130, 246, 0.12) !important;
+    }}
 
     /* Floating Feedback Popover */
-    div[data-testid="stPopover"] {
+    div[data-testid="stPopover"] {{
         position: fixed;
         bottom: 24px;
         right: 24px;
         z-index: 999999;
-    }
+    }}
     </style>
     """,
     unsafe_allow_html=True,
@@ -330,16 +358,29 @@ def is_exact_duplicate(existing_list, candidate):
 def render_dashboard():
     df_raw, scan_time = load_screener_results()
 
-    # 1. Sidebar Header & Filtering Controls
+    # 1. Sidebar Header, Theme Switcher & Filters
     with st.sidebar:
         st.markdown(
             """
-            <div style="display: inline-flex; align-items: center; gap: 6px; margin-bottom: 12px;">
-                <h3 style="margin: 0; padding: 0; font-size: 1.45rem; font-weight: 800; color: #0f172a; line-height: 1;">TrendNorth 🇨🇦</h3>
+            <div style="display: inline-flex; align-items: center; gap: 6px; margin-bottom: 8px;">
+                <h3 style="margin: 0; padding: 0; font-size: 1.45rem; font-weight: 800; line-height: 1;">TrendNorth 🇨🇦</h3>
             </div>
             """,
             unsafe_allow_html=True,
         )
+
+        # In-App Theme Selector Toggle (TN-019)
+        selected_theme = st.radio(
+            "Interface Theme",
+            options=["Dark (Terminal) 🌙", "Light (Clean) ☀️"],
+            index=0 if is_dark else 1,
+            horizontal=True,
+            key="theme_radio_selector",
+            label_visibility="collapsed",
+        )
+        if selected_theme != st.session_state["theme_mode"]:
+            st.session_state["theme_mode"] = selected_theme
+            st.rerun()
 
         if st.button("🔄 Refresh Data Now", use_container_width=True):
             st.cache_data.clear()
@@ -393,10 +434,10 @@ def render_dashboard():
     st.title("📈 TrendNorth 🇨🇦")
     st.markdown(
         f"""
-        <div style="font-size: 0.9rem; color: #64748b; margin-top: -12px; margin-bottom: 16px;">
-            <b>Date:</b> {today_et_str} &nbsp;|&nbsp; 
-            <b>Live Clock:</b> {now_time_et_str} &nbsp;|&nbsp; 
-            <b>Engine Scan Data:</b> {scan_date_str}
+        <div class="tn-meta-bar" style="font-size: 0.88rem; margin-top: -12px; margin-bottom: 18px; display: flex; flex-wrap: wrap; gap: 8px;">
+            <span>📅 <b>Date:</b> {today_et_str}</span>
+            <span>⏰ <b>Live Clock:</b> {now_time_et_str}</span>
+            <span>⚡ <b>Engine Scan Data:</b> {scan_date_str}</span>
         </div>
         """,
         unsafe_allow_html=True,
@@ -524,13 +565,22 @@ def render_dashboard():
             st.info("No TSX assets match your selected filter criteria.")
         else:
             def signal_styler(val):
-                if "BUY" in str(val):
-                    return "color: #15803d; background-color: #f0fdf4; font-weight: 700; border-radius: 4px;"
-                elif "SELL" in str(val):
-                    return "color: #b91c1c; background-color: #fef2f2; font-weight: 700; border-radius: 4px;"
-                elif "TRIM" in str(val):
-                    return "color: #b45309; background-color: #fffbeb; font-weight: 700; border-radius: 4px;"
-                return "color: #475569;"
+                if is_dark:
+                    if "BUY" in str(val):
+                        return "color: #4ade80; background-color: rgba(34, 197, 94, 0.15); font-weight: 700; border-radius: 4px;"
+                    elif "SELL" in str(val):
+                        return "color: #f87171; background-color: rgba(239, 68, 68, 0.15); font-weight: 700; border-radius: 4px;"
+                    elif "TRIM" in str(val):
+                        return "color: #fbbf24; background-color: rgba(245, 158, 11, 0.15); font-weight: 700; border-radius: 4px;"
+                    return "color: #94a3b8;"
+                else:
+                    if "BUY" in str(val):
+                        return "color: #15803d; background-color: #f0fdf4; font-weight: 700; border-radius: 4px;"
+                    elif "SELL" in str(val):
+                        return "color: #b91c1c; background-color: #fef2f2; font-weight: 700; border-radius: 4px;"
+                    elif "TRIM" in str(val):
+                        return "color: #b45309; background-color: #fffbeb; font-weight: 700; border-radius: 4px;"
+                    return "color: #475569;"
 
             columns_order = [
                 "Symbol", "Company", "Price", "Signal", "RSI_14", "SMA_50", "SMA_200", "Rationale"
@@ -856,15 +906,15 @@ def render_dashboard():
                     nbins=18,
                     color="Signal",
                     color_discrete_map={
-                        "BUY / ACCUMULATE": "#16a34a",
+                        "BUY / ACCUMULATE": "#22c55e",
                         "SELL / EXIT": "#ef4444",
                         "TRIM / TAKE PROFIT": "#f59e0b",
                         "KEEP / HOLD": "#64748b",
                     },
-                    template="plotly_white",
+                    template=plotly_theme,
                 )
-                fig_rsi.add_vline(x=40, line_dash="dot", line_color="green", annotation_text="Pullback (<=40)")
-                fig_rsi.add_vline(x=75, line_dash="dot", line_color="red", annotation_text="Overbought (>=75)")
+                fig_rsi.add_vline(x=40, line_dash="dot", line_color="#22c55e", annotation_text="Pullback (<=40)")
+                fig_rsi.add_vline(x=75, line_dash="dot", line_color="#ef4444", annotation_text="Overbought (>=75)")
                 fig_rsi.update_layout(xaxis_title="14-Day RSI", yaxis_title="Equities Count", height=420)
                 st.plotly_chart(fig_rsi, use_container_width=True)
 
@@ -879,12 +929,12 @@ def render_dashboard():
                     hover_data=hover_fields,
                     color="Signal",
                     color_discrete_map={
-                        "BUY / ACCUMULATE": "#16a34a",
+                        "BUY / ACCUMULATE": "#22c55e",
                         "SELL / EXIT": "#ef4444",
                         "TRIM / TAKE PROFIT": "#f59e0b",
                         "KEEP / HOLD": "#64748b",
                     },
-                    template="plotly_white",
+                    template=plotly_theme,
                 )
                 fig_scatter.update_layout(xaxis_title="50-Day SMA (CAD)", yaxis_title="Current Price (CAD)", height=420)
                 st.plotly_chart(fig_scatter, use_container_width=True)
