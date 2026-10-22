@@ -41,59 +41,34 @@ st.set_page_config(
 )
 
 # -----------------------------------------------------------------------------
-# Dynamic Dual-Theme Engine (Bulletproof Scope Architecture)
+# Static Dark Theme Tokens & CSS Injection
 # -----------------------------------------------------------------------------
-def get_theme_colors(is_dark_mode):
-    if is_dark_mode:
-        return {
-            "bg_app": "#090d16",
-            "bg_card": "#111827",
-            "bg_card_hover": "#1e293b",
-            "bg_sidebar": "#060911",
-            "border_col": "#1f2937",
-            "text_main": "#f9fafb",
-            "text_muted": "#9ca3af",
-            "input_bg": "#1f2937",
-            "input_text": "#f9fafb",
-            "plotly_tpl": "plotly_dark",
-            "tab_color": "#38bdf8"
-        }
-    else:
-        return {
-            "bg_app": "#f8fafc",
-            "bg_card": "#ffffff",
-            "bg_card_hover": "#f1f5f9",
-            "bg_sidebar": "#f1f5f9",
-            "border_col": "#e2e8f0",
-            "text_main": "#0f172a",
-            "text_muted": "#475569",
-            "input_bg": "#ffffff",
-            "input_text": "#0f172a",
-            "plotly_tpl": "plotly_white",
-            "tab_color": "#0284c7"
-        }
+bg_main = "#0b1120"
+bg_card = "#131d33"
+bg_card_hover = "#1e293b"
+bg_sidebar = "#060911"
+border_col = "#1f2937"
+text_title = "#f9fafb"
+text_sub = "#9ca3af"
+input_bg = "#1f2937"
+input_text = "#f9fafb"
+plotly_tpl = "plotly_dark"
+active_tab_color = "#38bdf8"
 
-if "theme_mode" not in st.session_state:
-    st.session_state["theme_mode"] = "Dark (Terminal) 🌙"
-
-is_dark_global = "Dark" in st.session_state["theme_mode"]
-t = get_theme_colors(is_dark_global)
-
-# Inject CSS Globally
 st.markdown(
     f"""
     <style>
     /* Global App Background & Text */
     .stApp {{
-        background-color: {t['bg_app']} !important;
-        color: {t['text_main']} !important;
+        background-color: {bg_main} !important;
+        color: {text_title} !important;
     }}
     header[data-testid="stHeader"] {{
-        background-color: {t['bg_app']} !important;
-        border-bottom: 1px solid {t['border_col']} !important;
+        background-color: {bg_main} !important;
+        border-bottom: 1px solid {border_col} !important;
     }}
     header[data-testid="stHeader"] * {{
-        color: {t['text_main']} !important;
+        color: {text_title} !important;
     }}
 
     /* Container Spacing */
@@ -104,28 +79,28 @@ st.markdown(
 
     /* Sidebar Theming */
     section[data-testid="stSidebar"] {{
-        background-color: {t['bg_sidebar']} !important;
-        border-right: 1px solid {t['border_col']} !important;
+        background-color: {bg_sidebar} !important;
+        border-right: 1px solid {border_col} !important;
     }}
     section[data-testid="stSidebar"] h1, 
     section[data-testid="stSidebar"] h2, 
     section[data-testid="stSidebar"] h3, 
     section[data-testid="stSidebar"] label,
     section[data-testid="stSidebar"] p {{
-        color: {t['text_main']} !important;
+        color: {text_title} !important;
     }}
     section[data-testid="stSidebar"] .stCaption {{
-        color: {t['text_muted']} !important;
+        color: {text_sub} !important;
     }}
 
     /* Inputs & Select Boxes */
     div[data-baseweb="input"], div[data-baseweb="select"] {{
-        background-color: {t['input_bg']} !important;
-        border: 1px solid {t['border_col']} !important;
+        background-color: {input_bg} !important;
+        border: 1px solid {border_col} !important;
         border-radius: 6px !important;
     }}
     div[data-baseweb="input"] input, div[data-baseweb="select"] * {{
-        color: {t['input_text']} !important;
+        color: {input_text} !important;
         background-color: transparent !important;
     }}
 
@@ -141,8 +116,8 @@ st.markdown(
 
     /* Metric Cards (Session Clocks) */
     div[data-testid="stMetric"] {{
-        background-color: {t['bg_card']} !important;
-        border: 1px solid {t['border_col']} !important;
+        background-color: {bg_card} !important;
+        border: 1px solid {border_col} !important;
         border-radius: 10px !important;
         padding: 12px 16px !important;
         min-height: 86px !important;
@@ -152,14 +127,14 @@ st.markdown(
         box-shadow: 0 1px 3px rgba(0,0,0,0.02) !important;
     }}
     div[data-testid="stMetricLabel"] * {{
-        color: {t['text_muted']} !important;
+        color: {text_sub} !important;
         font-weight: 700 !important;
         font-size: 0.80rem !important;
         text-transform: uppercase !important;
         letter-spacing: 0.5px !important;
     }}
     div[data-testid="stMetricValue"] * {{
-        color: {t['text_main']} !important;
+        color: {text_title} !important;
         font-weight: 800 !important;
         font-size: 1.15rem !important;
         line-height: 1.25 !important;
@@ -167,19 +142,19 @@ st.markdown(
 
     /* Top Sub-Header Meta Tags */
     .tn-meta-bar span {{
-        background: {t['bg_card']} !important;
-        border: 1px solid {t['border_col']} !important;
+        background: {bg_card} !important;
+        border: 1px solid {border_col} !important;
         padding: 4px 10px;
         border-radius: 6px;
-        color: {t['text_muted']} !important;
+        color: {text_sub} !important;
         font-size: 0.85rem;
     }}
 
     /* Interactive Embedded KPI Filter Cards */
     div.kpi-card-container button {{
         width: 100% !important;
-        background-color: {t['bg_card']} !important;
-        border: 1px solid {t['border_col']} !important;
+        background-color: {bg_card} !important;
+        border: 1px solid {border_col} !important;
         border-radius: 10px !important;
         padding: 12px 14px !important;
         text-align: left !important;
@@ -189,27 +164,27 @@ st.markdown(
         font-weight: 700 !important;
         min-height: 86px !important;
         transition: all 0.15s ease-in-out !important;
-        color: {t['text_main']} !important;
+        color: {text_title} !important;
     }}
     div.kpi-card-container button:hover {{
         border-color: #0284c7 !important;
-        background-color: {t['bg_card_hover']} !important;
+        background-color: {bg_card_hover} !important;
         transform: translateY(-1px);
         box-shadow: 0 4px 10px rgba(2, 132, 199, 0.12) !important;
     }}
     div.kpi-card-container button p {{
-        color: {t['text_main']} !important;
+        color: {text_title} !important;
     }}
 
     /* Secondary Buttons */
     button[kind="secondary"] {{
-        background-color: {t['bg_card']} !important;
-        border: 1px solid {t['border_col']} !important;
-        color: {t['text_main']} !important;
+        background-color: {bg_card} !important;
+        border: 1px solid {border_col} !important;
+        color: {text_title} !important;
         border-radius: 8px !important;
     }}
     button[kind="secondary"]:hover {{
-        background-color: {t['bg_card_hover']} !important;
+        background-color: {bg_card_hover} !important;
         border-color: #0284c7 !important;
         color: #0284c7 !important;
     }}
@@ -221,34 +196,41 @@ st.markdown(
         padding: 8px 16px !important;
     }}
     button[data-testid="stTab"] p {{
-        color: {t['text_muted']} !important;
+        color: {text_sub} !important;
         font-weight: 600 !important;
         font-size: 0.94rem !important;
     }}
     button[data-testid="stTab"][aria-selected="true"] {{
-        border-bottom: 2px solid {t['tab_color']} !important;
+        border-bottom: 2px solid {active_tab_color} !important;
     }}
     button[data-testid="stTab"][aria-selected="true"] p {{
-        color: {t['tab_color']} !important;
+        color: {active_tab_color} !important;
         font-weight: 700 !important;
     }}
     button[data-testid="stTab"]:hover p {{
-        color: {t['text_main']} !important;
+        color: {text_title} !important;
     }}
 
     /* Expanders */
     div[data-testid="stExpander"] {{
-        background-color: {t['bg_card']} !important;
-        border: 1px solid {t['border_col']} !important;
+        background-color: {bg_card} !important;
+        border: 1px solid {border_col} !important;
         border-radius: 8px !important;
     }}
     div[data-testid="stExpander"] summary,
     div[data-testid="stExpander"] div[role="region"] {{
-        background-color: {t['bg_card']} !important;
-        color: {t['text_main']} !important;
+        background-color: {bg_card} !important;
+        color: {text_title} !important;
     }}
     div[data-testid="stExpander"] * {{
-        color: {t['text_main']} !important;
+        color: {text_title} !important;
+    }}
+
+    /* Dataframe / Table Overrides */
+    div[data-testid="stDataFrame"] {{
+        background-color: {bg_card} !important;
+        border: 1px solid {border_col} !important;
+        border-radius: 8px !important;
     }}
 
     /* Floating Feedback Popover */
@@ -263,7 +245,7 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# Core Watchlist Company Names Mapping
+# Core Watchlist Company Names Mapping (59 TSX Equities & ETFs)
 COMPANY_NAMES = {
     "XEQT.TO": "iShares Core Equity ETF Portfolio",
     "XIU.TO": "iShares S&P/TSX 60 Index ETF",
@@ -503,34 +485,18 @@ def is_exact_duplicate(existing_list, candidate):
 # Main Application Dashboard
 # -----------------------------------------------------------------------------
 def render_dashboard():
-    # Evaluate theme colors securely inside the function
-    is_dark_local = "Dark" in st.session_state.get("theme_mode", "Dark (Terminal) 🌙")
-    loc_theme = get_theme_colors(is_dark_local)
-
     df_raw, scan_time = load_screener_results()
 
-    # 1. Sidebar Header, Theme Switcher & Filters
+    # 1. Sidebar Header & Filters (Theme toggle removed)
     with st.sidebar:
         st.markdown(
             f"""
-            <div style="display: inline-flex; align-items: center; gap: 6px; margin-bottom: 8px;">
-                <h3 style="margin: 0; padding: 0; font-size: 1.45rem; font-weight: 800; color: {loc_theme['text_main']}; line-height: 1;">TrendNorth 🇨🇦</h3>
+            <div style="display: inline-flex; align-items: center; gap: 6px; margin-bottom: 16px;">
+                <h3 style="margin: 0; padding: 0; font-size: 1.45rem; font-weight: 800; color: {text_title}; line-height: 1;">TrendNorth 🇨🇦</h3>
             </div>
             """,
             unsafe_allow_html=True,
         )
-
-        selected_theme = st.radio(
-            "Interface Theme",
-            options=["Dark (Terminal) 🌙", "Light (Clean) ☀️"],
-            index=0 if is_dark_local else 1,
-            horizontal=True,
-            key="theme_radio_selector",
-            label_visibility="collapsed",
-        )
-        if selected_theme != st.session_state["theme_mode"]:
-            st.session_state["theme_mode"] = selected_theme
-            st.rerun()
 
         if st.button("🔄 Refresh Data Now", use_container_width=True):
             st.cache_data.clear()
@@ -592,25 +558,15 @@ def render_dashboard():
         unsafe_allow_html=True,
     )
 
-    # 3 High-Visibility Balanced Cards
-    col_stat1, col_stat2, col_stat3 = st.columns([1.5, 1.25, 1.25])
+    col_stat1, col_stat2, col_stat3, col_stat4 = st.columns(4)
     with col_stat1:
-        st.metric(
-            label="TSX Market Status",
-            value=f"● {status_label}",
-            delta=status_detail,
-            delta_color="normal"
-        )
+        st.metric(label="TSX Status", value=f"● {status_label}")
     with col_stat2:
-        st.metric(
-            label="Session Time Elapsed",
-            value=elapsed_time
-        )
+        st.metric(label="Session Detail", value=status_detail)
     with col_stat3:
-        st.metric(
-            label="Time Until Close",
-            value=time_to_close
-        )
+        st.metric(label="Counter (Elapsed)", value=elapsed_time)
+    with col_stat4:
+        st.metric(label="Time to Close", value=time_to_close)
 
     if df_raw.empty:
         st.warning("Waiting for scan data... Run the GitHub Actions workflow or execute `python ScreenStocksV1.py` locally.")
@@ -641,7 +597,6 @@ def render_dashboard():
             | filtered_df["Company"].str.contains(search_query, case=False, na=False)
         ]
 
-    # Verify if any non-default filters are active
     has_active_filters = (
         set(selected_signals) != set(available_signals)
         or rsi_range != (0.0, 100.0)
@@ -708,7 +663,7 @@ def render_dashboard():
     )
 
     # -------------------------------------------------------------------------
-    # TAB 1: Filtered Watchlist (Interactive Native Sortable Dataframe)
+    # TAB 1: Filtered Watchlist 
     # -------------------------------------------------------------------------
     with tab_data:
         col_tab_info, col_clear = st.columns([7.5, 2.5])
@@ -720,22 +675,13 @@ def render_dashboard():
             st.info("No TSX assets match your selected filter criteria.")
         else:
             def signal_styler(val):
-                if is_dark_local:
-                    if "BUY" in str(val):
-                        return "color: #4ade80; background-color: rgba(34, 197, 94, 0.20); font-weight: 700; border-radius: 4px;"
-                    elif "SELL" in str(val):
-                        return "color: #f87171; background-color: rgba(239, 68, 68, 0.20); font-weight: 700; border-radius: 4px;"
-                    elif "TRIM" in str(val):
-                        return "color: #fbbf24; background-color: rgba(245, 158, 11, 0.20); font-weight: 700; border-radius: 4px;"
-                    return "color: #94a3b8;"
-                else:
-                    if "BUY" in str(val):
-                        return "color: #15803d; background-color: #dcfce7; font-weight: 700; border-radius: 4px;"
-                    elif "SELL" in str(val):
-                        return "color: #b91c1c; background-color: #fee2e2; font-weight: 700; border-radius: 4px;"
-                    elif "TRIM" in str(val):
-                        return "color: #b45309; background-color: #fef3c7; font-weight: 700; border-radius: 4px;"
-                    return "color: #475569;"
+                if "BUY" in str(val):
+                    return "color: #4ade80; background-color: rgba(34, 197, 94, 0.20); font-weight: 700; border-radius: 4px;"
+                elif "SELL" in str(val):
+                    return "color: #f87171; background-color: rgba(239, 68, 68, 0.20); font-weight: 700; border-radius: 4px;"
+                elif "TRIM" in str(val):
+                    return "color: #fbbf24; background-color: rgba(245, 158, 11, 0.20); font-weight: 700; border-radius: 4px;"
+                return "color: #9ca3af;"
 
             columns_order = [
                 "Symbol", "Company", "Price", "Signal", "RSI_14", "SMA_50", "SMA_200", "Rationale"
@@ -753,7 +699,6 @@ def render_dashboard():
                 .map(signal_styler, subset=["Signal"])
             )
 
-            # Native Glide Data Grid: Full Asc/Desc column sorting, resize, search & export
             st.dataframe(styled_df, use_container_width=True, hide_index=True)
 
             st.download_button(
@@ -764,7 +709,7 @@ def render_dashboard():
             )
 
     # -------------------------------------------------------------------------
-    # TAB 2: Pocket Trader (Portfolio & Target Execution Companion)
+    # TAB 2: Pocket Trader
     # -------------------------------------------------------------------------
     with tab_pocket:
         col_hdr1, col_hdr2 = st.columns([3, 2])
@@ -779,7 +724,6 @@ def render_dashboard():
                 icon="ℹ️"
             )
 
-        # 1. Batch Position Setup Form
         with st.expander("➕ Log Single or Multiple Positions (Batch Setup)", expanded=False):
             available_symbols = sorted(list(COMPANY_NAMES.keys()))
             chosen_symbols = st.multiselect(
@@ -840,7 +784,6 @@ def render_dashboard():
                         st.success(f"Added {added_count} position(s) to Pocket Trader!")
                     st.rerun()
 
-        # 2. Render Active Holdings Table
         if not st.session_state.pocket_positions:
             st.info("No active positions tracked in Pocket Trader yet. Add a stock using the batch form above or upload a CSV below.")
         else:
@@ -923,7 +866,6 @@ def render_dashboard():
                 key="pocket_table_selection",
             )
 
-            # Bulk Removal Action Bar
             selected_rows = event.selection.rows if hasattr(event, "selection") and event.selection else []
             if selected_rows:
                 act_col1, _ = st.columns([2, 8])
@@ -935,7 +877,6 @@ def render_dashboard():
                         sync_pocket_to_storage()
                         st.rerun()
 
-            # 3. Option B: Quick Edit Drawer for Tracked Positions
             with st.expander("✏️ Quick Edit Existing Position", expanded=False):
                 edit_options = [
                     f"#{i} — {p['Symbol']} (Bought {p.get('Buy Date', '—')} @ ${p.get('Buy Price', 0):.2f})"
@@ -972,7 +913,6 @@ def render_dashboard():
                         st.success(f"Updated {target_pos['Symbol']} successfully!")
                         st.rerun()
 
-        # 4. Portfolio Backup & Restore (Unconditionally Available)
         st.markdown("---")
         with st.expander("📁 Portfolio Backup & Restore", expanded=False):
             b_col1, b_col2 = st.columns(2)
@@ -1066,7 +1006,7 @@ def render_dashboard():
                         "TRIM / TAKE PROFIT": "#f59e0b",
                         "KEEP / HOLD": "#64748b",
                     },
-                    template=loc_theme["plotly_tpl"],
+                    template=plotly_tpl,
                 )
                 fig_rsi.add_vline(x=40, line_dash="dot", line_color="#22c55e", annotation_text="Pullback (<=40)")
                 fig_rsi.add_vline(x=75, line_dash="dot", line_color="#ef4444", annotation_text="Overbought (>=75)")
@@ -1089,7 +1029,7 @@ def render_dashboard():
                         "TRIM / TAKE PROFIT": "#f59e0b",
                         "KEEP / HOLD": "#64748b",
                     },
-                    template=loc_theme["plotly_tpl"],
+                    template=plotly_tpl,
                 )
                 fig_scatter.update_layout(xaxis_title="50-Day SMA (CAD)", yaxis_title="Current Price (CAD)", height=420)
                 st.plotly_chart(fig_scatter, use_container_width=True)
