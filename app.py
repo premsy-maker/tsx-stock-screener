@@ -41,46 +41,59 @@ st.set_page_config(
 )
 
 # -----------------------------------------------------------------------------
-# Dynamic Dual-Theme Engine 
+# Dynamic Dual-Theme Engine (Bulletproof Scope Architecture)
 # -----------------------------------------------------------------------------
+def get_theme_colors(is_dark_mode):
+    if is_dark_mode:
+        return {
+            "bg_app": "#090d16",
+            "bg_card": "#111827",
+            "bg_card_hover": "#1e293b",
+            "bg_sidebar": "#060911",
+            "border_col": "#1f2937",
+            "text_main": "#f9fafb",
+            "text_muted": "#9ca3af",
+            "input_bg": "#1f2937",
+            "input_text": "#f9fafb",
+            "plotly_tpl": "plotly_dark",
+            "tab_color": "#38bdf8"
+        }
+    else:
+        return {
+            "bg_app": "#f8fafc",
+            "bg_card": "#ffffff",
+            "bg_card_hover": "#f1f5f9",
+            "bg_sidebar": "#f1f5f9",
+            "border_col": "#e2e8f0",
+            "text_main": "#0f172a",
+            "text_muted": "#475569",
+            "input_bg": "#ffffff",
+            "input_text": "#0f172a",
+            "plotly_tpl": "plotly_white",
+            "tab_color": "#0284c7"
+        }
+
 if "theme_mode" not in st.session_state:
     st.session_state["theme_mode"] = "Dark (Terminal) 🌙"
 
-is_dark = "Dark" in st.session_state["theme_mode"]
+is_dark_global = "Dark" in st.session_state["theme_mode"]
+t = get_theme_colors(is_dark_global)
 
-# Dynamic palette tokens for full app control
-bg_main = "#0b1120" if is_dark else "#f8fafc"
-bg_card = "#131d33" if is_dark else "#ffffff"
-bg_card_hover = "#1e293b" if is_dark else "#f1f5f9"
-bg_sidebar = "#070c18" if is_dark else "#f8fafc"
-border_color = "#243556" if is_dark else "#e2e8f0"
-text_main = "#f8fafc" if is_dark else "#0f172a"
-text_muted = "#94a3b8" if is_dark else "#475569"
-active_tab_color = "#38bdf8" if is_dark else "#0284c7"
-plotly_tpl = "plotly_dark" if is_dark else "plotly_white"
-
-# We map CSS variables directly to :root so Streamlit's native dataframes and inputs inherit them automatically.
+# Inject CSS Globally
 st.markdown(
     f"""
     <style>
-    /* 1. Global CSS Root Token Overrides (Forces Streamlit Native Elements to Comply) */
-    :root {{
-        --background-color: {bg_main} !important;
-        --secondary-background-color: {bg_card} !important;
-        --text-color: {text_main} !important;
-    }}
-
     /* Global App Background & Text */
     .stApp {{
-        background-color: {bg_main} !important;
-        color: {text_main} !important;
+        background-color: {t['bg_app']} !important;
+        color: {t['text_main']} !important;
     }}
     header[data-testid="stHeader"] {{
-        background-color: {bg_main} !important;
-        border-bottom: 1px solid {border_color} !important;
+        background-color: {t['bg_app']} !important;
+        border-bottom: 1px solid {t['border_col']} !important;
     }}
     header[data-testid="stHeader"] * {{
-        color: {text_main} !important;
+        color: {t['text_main']} !important;
     }}
 
     /* Container Spacing */
@@ -91,28 +104,28 @@ st.markdown(
 
     /* Sidebar Theming */
     section[data-testid="stSidebar"] {{
-        background-color: {bg_sidebar} !important;
-        border-right: 1px solid {border_color} !important;
+        background-color: {t['bg_sidebar']} !important;
+        border-right: 1px solid {t['border_col']} !important;
     }}
     section[data-testid="stSidebar"] h1, 
     section[data-testid="stSidebar"] h2, 
     section[data-testid="stSidebar"] h3, 
     section[data-testid="stSidebar"] label,
     section[data-testid="stSidebar"] p {{
-        color: {text_main} !important;
+        color: {t['text_main']} !important;
     }}
     section[data-testid="stSidebar"] .stCaption {{
-        color: {text_muted} !important;
+        color: {t['text_muted']} !important;
     }}
 
     /* Inputs & Select Boxes */
     div[data-baseweb="input"], div[data-baseweb="select"] {{
-        background-color: {bg_card} !important;
-        border: 1px solid {border_color} !important;
+        background-color: {t['input_bg']} !important;
+        border: 1px solid {t['border_col']} !important;
         border-radius: 6px !important;
     }}
     div[data-baseweb="input"] input, div[data-baseweb="select"] * {{
-        color: {text_main} !important;
+        color: {t['input_text']} !important;
         background-color: transparent !important;
     }}
 
@@ -128,8 +141,8 @@ st.markdown(
 
     /* Metric Cards (Session Clocks) */
     div[data-testid="stMetric"] {{
-        background-color: {bg_card} !important;
-        border: 1px solid {border_color} !important;
+        background-color: {t['bg_card']} !important;
+        border: 1px solid {t['border_col']} !important;
         border-radius: 10px !important;
         padding: 12px 16px !important;
         min-height: 86px !important;
@@ -139,14 +152,14 @@ st.markdown(
         box-shadow: 0 1px 3px rgba(0,0,0,0.02) !important;
     }}
     div[data-testid="stMetricLabel"] * {{
-        color: {text_muted} !important;
+        color: {t['text_muted']} !important;
         font-weight: 700 !important;
         font-size: 0.80rem !important;
         text-transform: uppercase !important;
         letter-spacing: 0.5px !important;
     }}
     div[data-testid="stMetricValue"] * {{
-        color: {text_main} !important;
+        color: {t['text_main']} !important;
         font-weight: 800 !important;
         font-size: 1.15rem !important;
         line-height: 1.25 !important;
@@ -154,19 +167,19 @@ st.markdown(
 
     /* Top Sub-Header Meta Tags */
     .tn-meta-bar span {{
-        background: {bg_card} !important;
-        border: 1px solid {border_color} !important;
+        background: {t['bg_card']} !important;
+        border: 1px solid {t['border_col']} !important;
         padding: 4px 10px;
         border-radius: 6px;
-        color: {text_muted} !important;
+        color: {t['text_muted']} !important;
         font-size: 0.85rem;
     }}
 
     /* Interactive Embedded KPI Filter Cards */
     div.kpi-card-container button {{
         width: 100% !important;
-        background-color: {bg_card} !important;
-        border: 1px solid {border_color} !important;
+        background-color: {t['bg_card']} !important;
+        border: 1px solid {t['border_col']} !important;
         border-radius: 10px !important;
         padding: 12px 14px !important;
         text-align: left !important;
@@ -176,27 +189,27 @@ st.markdown(
         font-weight: 700 !important;
         min-height: 86px !important;
         transition: all 0.15s ease-in-out !important;
-        color: {text_main} !important;
+        color: {t['text_main']} !important;
     }}
     div.kpi-card-container button:hover {{
         border-color: #0284c7 !important;
-        background-color: {bg_card_hover} !important;
+        background-color: {t['bg_card_hover']} !important;
         transform: translateY(-1px);
         box-shadow: 0 4px 10px rgba(2, 132, 199, 0.12) !important;
     }}
     div.kpi-card-container button p {{
-        color: {text_main} !important;
+        color: {t['text_main']} !important;
     }}
 
     /* Secondary Buttons */
     button[kind="secondary"] {{
-        background-color: {bg_card} !important;
-        border: 1px solid {border_color} !important;
-        color: {text_main} !important;
+        background-color: {t['bg_card']} !important;
+        border: 1px solid {t['border_col']} !important;
+        color: {t['text_main']} !important;
         border-radius: 8px !important;
     }}
     button[kind="secondary"]:hover {{
-        background-color: {bg_card_hover} !important;
+        background-color: {t['bg_card_hover']} !important;
         border-color: #0284c7 !important;
         color: #0284c7 !important;
     }}
@@ -208,41 +221,34 @@ st.markdown(
         padding: 8px 16px !important;
     }}
     button[data-testid="stTab"] p {{
-        color: {text_muted} !important;
+        color: {t['text_muted']} !important;
         font-weight: 600 !important;
         font-size: 0.94rem !important;
     }}
     button[data-testid="stTab"][aria-selected="true"] {{
-        border-bottom: 2px solid {active_tab_color} !important;
+        border-bottom: 2px solid {t['tab_color']} !important;
     }}
     button[data-testid="stTab"][aria-selected="true"] p {{
-        color: {active_tab_color} !important;
+        color: {t['tab_color']} !important;
         font-weight: 700 !important;
     }}
     button[data-testid="stTab"]:hover p {{
-        color: {text_main} !important;
+        color: {t['text_main']} !important;
     }}
 
     /* Expanders */
     div[data-testid="stExpander"] {{
-        background-color: {bg_card} !important;
-        border: 1px solid {border_color} !important;
+        background-color: {t['bg_card']} !important;
+        border: 1px solid {t['border_col']} !important;
         border-radius: 8px !important;
     }}
     div[data-testid="stExpander"] summary,
     div[data-testid="stExpander"] div[role="region"] {{
-        background-color: {bg_card} !important;
-        color: {text_main} !important;
+        background-color: {t['bg_card']} !important;
+        color: {t['text_main']} !important;
     }}
     div[data-testid="stExpander"] * {{
-        color: {text_main} !important;
-    }}
-
-    /* Dataframe / Table Overrides */
-    div[data-testid="stDataFrame"] {{
-        background-color: {bg_card} !important;
-        border: 1px solid {border_color} !important;
-        border-radius: 8px !important;
+        color: {t['text_main']} !important;
     }}
 
     /* Floating Feedback Popover */
@@ -257,7 +263,7 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# Core Watchlist Company Names Mapping (59 TSX Equities & ETFs)
+# Core Watchlist Company Names Mapping
 COMPANY_NAMES = {
     "XEQT.TO": "iShares Core Equity ETF Portfolio",
     "XIU.TO": "iShares S&P/TSX 60 Index ETF",
@@ -392,7 +398,7 @@ def get_tsx_market_status():
         return "CLOSED", "Market Closed (Post-Session)", "Session Ended", "Opens 9:30 AM ET next trading day"
 
 # -----------------------------------------------------------------------------
-# Resilient Data Loader with Cache-Busting & Diagnostics (TN-008 & TN-001)
+# Resilient Data Loader with Cache-Busting & Diagnostics
 # -----------------------------------------------------------------------------
 @st.cache_data(ttl=60)
 def load_screener_results():
@@ -497,6 +503,10 @@ def is_exact_duplicate(existing_list, candidate):
 # Main Application Dashboard
 # -----------------------------------------------------------------------------
 def render_dashboard():
+    # Evaluate theme colors securely inside the function
+    is_dark_local = "Dark" in st.session_state.get("theme_mode", "Dark (Terminal) 🌙")
+    loc_theme = get_theme_colors(is_dark_local)
+
     df_raw, scan_time = load_screener_results()
 
     # 1. Sidebar Header, Theme Switcher & Filters
@@ -504,7 +514,7 @@ def render_dashboard():
         st.markdown(
             f"""
             <div style="display: inline-flex; align-items: center; gap: 6px; margin-bottom: 8px;">
-                <h3 style="margin: 0; padding: 0; font-size: 1.45rem; font-weight: 800; color: {text_title}; line-height: 1;">TrendNorth 🇨🇦</h3>
+                <h3 style="margin: 0; padding: 0; font-size: 1.45rem; font-weight: 800; color: {loc_theme['text_main']}; line-height: 1;">TrendNorth 🇨🇦</h3>
             </div>
             """,
             unsafe_allow_html=True,
@@ -513,7 +523,7 @@ def render_dashboard():
         selected_theme = st.radio(
             "Interface Theme",
             options=["Dark (Terminal) 🌙", "Light (Clean) ☀️"],
-            index=0 if is_dark else 1,
+            index=0 if is_dark_local else 1,
             horizontal=True,
             key="theme_radio_selector",
             label_visibility="collapsed",
@@ -582,23 +592,23 @@ def render_dashboard():
         unsafe_allow_html=True,
     )
 
-    # 3 Equal-Width Cards
-    col_stat1, col_stat2, col_stat3 = st.columns(3)
+    # 3 High-Visibility Balanced Cards
+    col_stat1, col_stat2, col_stat3 = st.columns([1.5, 1.25, 1.25])
     with col_stat1:
         st.metric(
-            label="TSX MARKET STATUS",
+            label="TSX Market Status",
             value=f"● {status_label}",
             delta=status_detail,
             delta_color="normal"
         )
     with col_stat2:
         st.metric(
-            label="SESSION TIME ELAPSED",
+            label="Session Time Elapsed",
             value=elapsed_time
         )
     with col_stat3:
         st.metric(
-            label="TIME UNTIL CLOSE",
+            label="Time Until Close",
             value=time_to_close
         )
 
@@ -710,7 +720,7 @@ def render_dashboard():
             st.info("No TSX assets match your selected filter criteria.")
         else:
             def signal_styler(val):
-                if is_dark:
+                if is_dark_local:
                     if "BUY" in str(val):
                         return "color: #4ade80; background-color: rgba(34, 197, 94, 0.20); font-weight: 700; border-radius: 4px;"
                     elif "SELL" in str(val):
@@ -732,7 +742,6 @@ def render_dashboard():
             ]
             display_cols = [c for c in columns_order if c in filtered_df.columns]
 
-            # We DO NOT inject `table_cell_bg` so Streamlit natively toggles light/dark for the grid.
             styled_df = (
                 filtered_df[display_cols]
                 .style.format({
@@ -1057,7 +1066,7 @@ def render_dashboard():
                         "TRIM / TAKE PROFIT": "#f59e0b",
                         "KEEP / HOLD": "#64748b",
                     },
-                    template=plotly_tpl,
+                    template=loc_theme["plotly_tpl"],
                 )
                 fig_rsi.add_vline(x=40, line_dash="dot", line_color="#22c55e", annotation_text="Pullback (<=40)")
                 fig_rsi.add_vline(x=75, line_dash="dot", line_color="#ef4444", annotation_text="Overbought (>=75)")
@@ -1080,7 +1089,7 @@ def render_dashboard():
                         "TRIM / TAKE PROFIT": "#f59e0b",
                         "KEEP / HOLD": "#64748b",
                     },
-                    template=plotly_tpl,
+                    template=loc_theme["plotly_tpl"],
                 )
                 fig_scatter.update_layout(xaxis_title="50-Day SMA (CAD)", yaxis_title="Current Price (CAD)", height=420)
                 st.plotly_chart(fig_scatter, use_container_width=True)
