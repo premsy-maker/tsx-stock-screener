@@ -43,12 +43,13 @@ st.set_page_config(
 # -----------------------------------------------------------------------------
 # Dynamic Dual-Theme Engine (TN-019)
 # -----------------------------------------------------------------------------
+# 1. Initialize State
 if "theme_mode" not in st.session_state:
     st.session_state["theme_mode"] = "Dark (Terminal) 🌙"
 
 is_dark = "Dark" in st.session_state["theme_mode"]
 
-# Exact Palette Definitions mapped globally
+# 2. Define Theme Tokens globally (Guarantees no NameError)
 if is_dark:
     bg_app = "#090d16"
     bg_card = "#111827"
@@ -57,8 +58,6 @@ if is_dark:
     border_col = "#1f2937"
     text_title = "#f9fafb"
     text_sub = "#9ca3af"
-    table_cell_bg = "#111827"
-    table_text = "#f9fafb"
     input_bg = "#1f2937"
     input_text = "#f9fafb"
     plotly_tpl = "plotly_dark"
@@ -71,13 +70,12 @@ else:
     border_col = "#e2e8f0"
     text_title = "#0f172a"
     text_sub = "#475569"
-    table_cell_bg = "#ffffff"
-    table_text = "#0f172a"
     input_bg = "#ffffff"
     input_text = "#0f172a"
     plotly_tpl = "plotly_white"
     active_tab_color = "#0284c7"
 
+# 3. Inject CSS
 st.markdown(
     f"""
     <style>
@@ -116,7 +114,7 @@ st.markdown(
         color: {text_sub} !important;
     }}
 
-    /* Inputs, Text Boxes, Dropdowns in Active Theme */
+    /* Inputs & Select Boxes */
     div[data-baseweb="input"], div[data-baseweb="select"] {{
         background-color: {input_bg} !important;
         border: 1px solid {border_col} !important;
@@ -127,7 +125,7 @@ st.markdown(
         background-color: transparent !important;
     }}
 
-    /* Multiselect Tags (Always Crisp Blue Badges) */
+    /* Multiselect Tags (Blue Badge) */
     span[data-baseweb="tag"] {{
         background-color: #0284c7 !important;
         color: #ffffff !important;
@@ -137,23 +135,13 @@ st.markdown(
         color: #ffffff !important;
     }}
 
-    /* Top Sub-Header Meta Tags */
-    .tn-meta-bar span {{
-        background: {bg_card} !important;
-        border: 1px solid {border_col} !important;
-        padding: 5px 12px;
-        border-radius: 6px;
-        color: {text_sub} !important;
-        font-size: 0.85rem;
-    }}
-
-    /* Top Status & Session Clock Metrics */
+    /* Metric Cards (Session Clocks) */
     div[data-testid="stMetric"] {{
         background-color: {bg_card} !important;
         border: 1px solid {border_col} !important;
         border-radius: 10px !important;
         padding: 12px 16px !important;
-        min-height: 84px !important;
+        min-height: 86px !important;
         display: flex !important;
         flex-direction: column !important;
         justify-content: center !important;
@@ -162,38 +150,48 @@ st.markdown(
     div[data-testid="stMetricLabel"] * {{
         color: {text_sub} !important;
         font-weight: 700 !important;
-        font-size: 0.78rem !important;
+        font-size: 0.80rem !important;
         text-transform: uppercase !important;
         letter-spacing: 0.5px !important;
     }}
     div[data-testid="stMetricValue"] * {{
         color: {text_title} !important;
         font-weight: 800 !important;
-        font-size: 1.12rem !important;
+        font-size: 1.15rem !important;
         line-height: 1.25 !important;
     }}
 
-    /* Interactive Embedded KPI Cards */
+    /* Top Sub-Header Meta Tags */
+    .tn-meta-bar span {{
+        background: {bg_card} !important;
+        border: 1px solid {border_col} !important;
+        padding: 4px 10px;
+        border-radius: 6px;
+        color: {text_sub} !important;
+        font-size: 0.85rem;
+    }}
+
+    /* Interactive Embedded KPI Filter Cards */
     div.kpi-card-container button {{
         width: 100% !important;
         background-color: {bg_card} !important;
         border: 1px solid {border_col} !important;
         border-radius: 10px !important;
-        padding: 12px 16px !important;
+        padding: 12px 14px !important;
         text-align: left !important;
         white-space: pre-line !important;
         line-height: 1.35 !important;
         font-size: 0.95rem !important;
         font-weight: 700 !important;
-        min-height: 84px !important;
+        min-height: 86px !important;
         transition: all 0.15s ease-in-out !important;
         color: {text_title} !important;
     }}
     div.kpi-card-container button:hover {{
-        border-color: #0284c7 !important;
+        border-color: #38bdf8 !important;
         background-color: {bg_card_hover} !important;
         transform: translateY(-1px);
-        box-shadow: 0 4px 10px rgba(2, 132, 199, 0.12) !important;
+        box-shadow: 0 4px 10px rgba(56, 189, 248, 0.12) !important;
     }}
     div.kpi-card-container button p {{
         color: {text_title} !important;
@@ -369,7 +367,7 @@ def get_tsx_market_status():
     }
 
     if weekday >= 5 or now_et.date() in tsx_holidays_2026:
-        return "CLOSED", "Weekend / Holiday", "Closed", "Opens next trading day 9:30 AM ET"
+        return "CLOSED", "Weekend / Holiday", "Closed", "Opens 9:30 AM ET next trading day"
 
     if today_time < open_time:
         time_until = datetime.combine(now_et.date(), open_time, tzinfo=ET_ZONE) - now_et
@@ -586,25 +584,16 @@ def render_dashboard():
         unsafe_allow_html=True,
     )
 
-    # 3 High-Visibility Balanced Cards
-    col_stat1, col_stat2, col_stat3 = st.columns([1.5, 1.25, 1.25])
+    # Clean 4-Column Grid aligning with KPI tiles below
+    col_stat1, col_stat2, col_stat3, col_stat4 = st.columns(4)
     with col_stat1:
-        st.metric(
-            label="TSX Market Status",
-            value=f"● {status_label}",
-            delta=status_detail,
-            delta_color="normal"
-        )
+        st.metric(label="TSX Status", value=f"● {status_label}")
     with col_stat2:
-        st.metric(
-            label="Session Time Elapsed",
-            value=elapsed_time
-        )
+        st.metric(label="Session Detail", value=status_detail)
     with col_stat3:
-        st.metric(
-            label="Time Until Close",
-            value=time_to_close
-        )
+        st.metric(label="Counter (Elapsed)", value=elapsed_time)
+    with col_stat4:
+        st.metric(label="Time to Close", value=time_to_close)
 
     if df_raw.empty:
         st.warning("Waiting for scan data... Run the GitHub Actions workflow or execute `python ScreenStocksV1.py` locally.")
@@ -736,15 +725,10 @@ def render_dashboard():
             ]
             display_cols = [c for c in columns_order if c in filtered_df.columns]
 
-            # Native pandas styling with theme-aware cells
+            # Native pandas styling using default Streamlit grid canvas mapping
             styled_df = (
                 filtered_df[display_cols]
-                .style.set_properties(**{
-                    "background-color": table_cell_bg,
-                    "color": table_text,
-                    "border-color": border_col,
-                })
-                .format({
+                .style.format({
                     "Price": "${:.2f}",
                     "SMA_50": "${:.2f}",
                     "SMA_200": "${:.2f}",
@@ -908,11 +892,7 @@ def render_dashboard():
             ]]
 
             event = st.dataframe(
-                display_port.style.set_properties(**{
-                    "background-color": table_cell_bg,
-                    "color": table_text,
-                    "border-color": border_col,
-                }).format({
+                display_port.style.format({
                     "Buy Price": "${:.2f}",
                     "Current Price": "${:.2f}",
                     "Market Value": "${:,.2f}",
