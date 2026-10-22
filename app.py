@@ -41,32 +41,67 @@ st.set_page_config(
 )
 
 # -----------------------------------------------------------------------------
-# Theming State & Dynamic CSS Injection (TN-019)
+# Theming State & Cohesive Full-Portal Theming (TN-019)
 # -----------------------------------------------------------------------------
 if "theme_mode" not in st.session_state:
     st.session_state["theme_mode"] = "Dark (Terminal) 🌙"
 
 is_dark = "Dark" in st.session_state["theme_mode"]
 
-# Dynamic palette selection
-theme_bg = "#090d16" if is_dark else "#f8fafc"
-card_bg = "#131b2e" if is_dark else "#ffffff"
-card_border = "#22314e" if is_dark else "#e2e8f0"
-text_primary = "#f1f5f9" if is_dark else "#0f172a"
+# Dynamic Color Tokens
+theme_bg = "#0b1120" if is_dark else "#f8fafc"
+sidebar_bg = "#070c18" if is_dark else "#ffffff"
+card_bg = "#131d33" if is_dark else "#ffffff"
+card_hover = "#1a2744" if is_dark else "#f1f5f9"
+card_border = "#243556" if is_dark else "#e2e8f0"
+text_primary = "#f8fafc" if is_dark else "#0f172a"
 text_secondary = "#94a3b8" if is_dark else "#64748b"
+btn_text_color = "#e2e8f0" if is_dark else "#0f172a"
 plotly_theme = "plotly_dark" if is_dark else "plotly_white"
 
 st.markdown(
     f"""
     <style>
-    /* Global Page Styling */
+    /* Full App & Sidebar Theme */
     .stApp {{
         background-color: {theme_bg} !important;
         color: {text_primary} !important;
     }}
+    section[data-testid="stSidebar"] {{
+        background-color: {sidebar_bg} !important;
+        border-right: 1px solid {card_border} !important;
+    }}
+    section[data-testid="stSidebar"] * {{
+        color: {text_primary} !important;
+    }}
+    section[data-testid="stSidebar"] .stCaption {{
+        color: {text_secondary} !important;
+    }}
+
     .block-container {{
         padding-top: 1.8rem !important;
         padding-bottom: 3rem !important;
+    }}
+
+    /* Global Headings & Typography */
+    h1, h2, h3, h4, h5, h6, span, label, p {{
+        color: {text_primary} !important;
+    }}
+
+    /* Metrics & Session Clocks */
+    div[data-testid="stMetric"] {{
+        background-color: {card_bg} !important;
+        border: 1px solid {card_border} !important;
+        border-radius: 10px !important;
+        padding: 10px 14px !important;
+    }}
+    div[data-testid="stMetricLabel"] * {{
+        color: {text_secondary} !important;
+        font-weight: 600 !important;
+    }}
+    div[data-testid="stMetricValue"] * {{
+        color: {text_primary} !important;
+        font-weight: 800 !important;
     }}
 
     /* Sub-header meta bar */
@@ -76,9 +111,10 @@ st.markdown(
         padding: 4px 10px;
         border-radius: 6px;
         color: {text_secondary} !important;
+        font-size: 0.85rem;
     }}
 
-    /* Interactive Embedded KPI Metric Card Buttons */
+    /* Interactive KPI Metric Card Buttons */
     div.kpi-card-container button {{
         width: 100% !important;
         background-color: {card_bg} !important;
@@ -91,12 +127,28 @@ st.markdown(
         box-shadow: 0 1px 3px rgba(0,0,0,0.02) !important;
         transition: all 0.15s ease-in-out !important;
         min-height: 84px !important;
-        color: {text_primary} !important;
+    }}
+    div.kpi-card-container button p {{
+        color: {btn_text_color} !important;
+        font-weight: 700 !important;
+        font-size: 1.05rem !important;
     }}
     div.kpi-card-container button:hover {{
         border-color: #3b82f6 !important;
+        background-color: {card_hover} !important;
         transform: translateY(-1px);
-        box-shadow: 0 4px 12px rgba(59, 130, 246, 0.12) !important;
+        box-shadow: 0 4px 12px rgba(59, 130, 246, 0.15) !important;
+    }}
+    div.kpi-card-container button:hover p {{
+        color: #60a5fa !important;
+    }}
+
+    /* Dataframe Table Container */
+    div[data-testid="stDataFrame"] {{
+        background-color: {card_bg} !important;
+        border: 1px solid {card_border} !important;
+        border-radius: 8px !important;
+        padding: 4px !important;
     }}
 
     /* Floating Feedback Popover */
@@ -190,7 +242,7 @@ if "filter_search" not in st.session_state:
     st.session_state.filter_search = ""
 
 def set_signal_filter(signal_name):
-    """Callback to set single signal filter before widget tree evaluation."""
+    """Callback to set single signal filter cleanly before rerun."""
     if signal_name == "ALL":
         st.session_state.filter_signals = ALL_SIGNAL_TYPES.copy()
     else:
@@ -322,7 +374,6 @@ if "last_processed_file_id" not in st.session_state:
     st.session_state.last_processed_file_id = None
 
 def sync_pocket_to_storage():
-    """Syncs positions to browser localStorage if available."""
     if HAS_LOCAL_STORAGE and localS is not None:
         try:
             localS.setItem("trendnorth_pocket_positions", st.session_state.pocket_positions)
@@ -330,7 +381,6 @@ def sync_pocket_to_storage():
             pass
 
 def hydrate_pocket_from_storage():
-    """Hydrates positions from browser localStorage on first load."""
     if HAS_LOCAL_STORAGE and localS is not None and not st.session_state.pocket_positions:
         try:
             stored = localS.getItem("trendnorth_pocket_positions")
@@ -342,7 +392,6 @@ def hydrate_pocket_from_storage():
 hydrate_pocket_from_storage()
 
 def is_exact_duplicate(existing_list, candidate):
-    """Checks if a position matches an existing row across all 5 fields."""
     return any(
         pos["Symbol"] == candidate["Symbol"]
         and str(pos.get("Buy Date")) == str(candidate.get("Buy Date"))
@@ -369,7 +418,6 @@ def render_dashboard():
             unsafe_allow_html=True,
         )
 
-        # In-App Theme Selector Toggle (TN-019)
         selected_theme = st.radio(
             "Interface Theme",
             options=["Dark (Terminal) 🌙", "Light (Clean) ☀️"],
@@ -394,7 +442,6 @@ def render_dashboard():
         else:
             available_signals = ALL_SIGNAL_TYPES
 
-        # Linked directly to session state
         selected_signals = st.multiselect(
             "Signal Classification",
             options=available_signals,
@@ -434,7 +481,7 @@ def render_dashboard():
     st.title("📈 TrendNorth 🇨🇦")
     st.markdown(
         f"""
-        <div class="tn-meta-bar" style="font-size: 0.88rem; margin-top: -12px; margin-bottom: 18px; display: flex; flex-wrap: wrap; gap: 8px;">
+        <div class="tn-meta-bar" style="margin-top: -12px; margin-bottom: 18px; display: flex; flex-wrap: wrap; gap: 8px;">
             <span>📅 <b>Date:</b> {today_et_str}</span>
             <span>⏰ <b>Live Clock:</b> {now_time_et_str}</span>
             <span>⚡ <b>Engine Scan Data:</b> {scan_date_str}</span>
@@ -485,7 +532,7 @@ def render_dashboard():
             | filtered_df["Company"].str.contains(search_query, case=False, na=False)
         ]
 
-    # Verify if any non-default filters are active
+    # Check if any filters are active
     has_active_filters = (
         set(selected_signals) != set(available_signals)
         or rsi_range != (0.0, 100.0)
@@ -493,7 +540,7 @@ def render_dashboard():
         or bool(search_query)
     )
 
-    # 3. Interactive Embedded Metric Cards (Single Clickable Tile per Card)
+    # 3. Interactive Embedded Metric Cards (Dark/Light Responsive)
     m_col1, m_col2, m_col3, m_col4 = st.columns(4)
 
     with m_col1:
@@ -552,10 +599,9 @@ def render_dashboard():
     )
 
     # -------------------------------------------------------------------------
-    # TAB 1: Filtered Watchlist
+    # TAB 1: Filtered Watchlist (Theme-Aware Cell & Row Styling)
     # -------------------------------------------------------------------------
     with tab_data:
-        # Contextual Action Bar with "Clear all filters" button
         col_tab_info, col_clear = st.columns([7.5, 2.5])
         with col_clear:
             if has_active_filters:
@@ -564,14 +610,18 @@ def render_dashboard():
         if filtered_df.empty:
             st.info("No TSX assets match your selected filter criteria.")
         else:
+            # Theme-aware row and cell styling
+            row_bg = "#111827" if is_dark else "#ffffff"
+            text_color = "#f9fafb" if is_dark else "#111827"
+
             def signal_styler(val):
                 if is_dark:
                     if "BUY" in str(val):
-                        return "color: #4ade80; background-color: rgba(34, 197, 94, 0.15); font-weight: 700; border-radius: 4px;"
+                        return "color: #4ade80; background-color: rgba(34, 197, 94, 0.20); font-weight: 700; border-radius: 4px;"
                     elif "SELL" in str(val):
-                        return "color: #f87171; background-color: rgba(239, 68, 68, 0.15); font-weight: 700; border-radius: 4px;"
+                        return "color: #f87171; background-color: rgba(239, 68, 68, 0.20); font-weight: 700; border-radius: 4px;"
                     elif "TRIM" in str(val):
-                        return "color: #fbbf24; background-color: rgba(245, 158, 11, 0.15); font-weight: 700; border-radius: 4px;"
+                        return "color: #fbbf24; background-color: rgba(245, 158, 11, 0.20); font-weight: 700; border-radius: 4px;"
                     return "color: #94a3b8;"
                 else:
                     if "BUY" in str(val):
@@ -589,7 +639,12 @@ def render_dashboard():
 
             styled_df = (
                 filtered_df[display_cols]
-                .style.format({
+                .style.set_properties(**{
+                    "background-color": row_bg,
+                    "color": text_color,
+                    "border-color": card_border,
+                })
+                .format({
                     "Price": "${:.2f}",
                     "SMA_50": "${:.2f}",
                     "SMA_200": "${:.2f}",
@@ -732,7 +787,6 @@ def render_dashboard():
 
             port_df = pd.DataFrame(calc_rows)
 
-            # Portfolio Summary KPIs (Card Formats)
             total_invested = port_df["Cost Basis"].sum()
             total_current = port_df["Market Value"].sum()
             total_net_pl = total_current - total_invested
@@ -752,8 +806,15 @@ def render_dashboard():
                 "Market Value", "Unrealized P&L ($)", "Return (%)", "Target Price", "Status", "Live Signal"
             ]]
 
+            port_row_bg = "#111827" if is_dark else "#ffffff"
+            port_text_color = "#f9fafb" if is_dark else "#111827"
+
             event = st.dataframe(
-                display_port.style.format({
+                display_port.style.set_properties(**{
+                    "background-color": port_row_bg,
+                    "color": port_text_color,
+                    "border-color": card_border,
+                }).format({
                     "Buy Price": "${:.2f}",
                     "Current Price": "${:.2f}",
                     "Market Value": "${:,.2f}",
