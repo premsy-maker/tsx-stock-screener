@@ -6,5 +6,17 @@ secondaryBackgroundColor = "#131d33"
 textColor = "#f8fafc"
 font = "sans serif"
 
+[theme.dark]
+primaryColor = "#38bdf8"
+backgroundColor = "#0b1120"
+secondaryBackgroundColor = "#131d33"
+textColor = "#f8fafc"
+
+[theme.light]
+primaryColor = "#0284c7"
+backgroundColor = "#f8fafc"
+secondaryBackgroundColor = "#ffffff"
+textColor = "#0f172a"
+
 [client]
 toolbarMode = "minimal"

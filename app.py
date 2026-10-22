@@ -48,21 +48,21 @@ if "theme_mode" not in st.session_state:
 
 is_dark = "Dark" in st.session_state["theme_mode"]
 
-# Dynamic Color Tokens
+# Dynamic palette tokens
 bg_main = "#0b1120" if is_dark else "#f8fafc"
 bg_card = "#131d33" if is_dark else "#ffffff"
 bg_card_hover = "#1e293b" if is_dark else "#f1f5f9"
-bg_sidebar = "#070c18" if is_dark else "#ffffff"
+bg_sidebar = "#070c18" if is_dark else "#f8fafc"
 border_color = "#243556" if is_dark else "#e2e8f0"
 text_main = "#f8fafc" if is_dark else "#0f172a"
-text_muted = "#94a3b8" if is_dark else "#64748b"
+text_muted = "#94a3b8" if is_dark else "#475569"
 active_tab_color = "#38bdf8" if is_dark else "#0284c7"
 plotly_theme = "plotly_dark" if is_dark else "plotly_white"
 
 st.markdown(
     f"""
     <style>
-    /* 1. Global Page Background & Header Toolbar */
+    /* Global Page Background & Header Toolbar */
     .stApp {{
         background-color: {bg_main} !important;
         color: {text_main} !important;
@@ -75,13 +75,13 @@ st.markdown(
         color: {text_main} !important;
     }}
 
-    /* 2. Container Spacing */
+    /* Container Spacing */
     .block-container {{
         padding-top: 1.5rem !important;
         padding-bottom: 3rem !important;
     }}
 
-    /* 3. Sidebar Theming */
+    /* Sidebar Theming */
     section[data-testid="stSidebar"] {{
         background-color: {bg_sidebar} !important;
         border-right: 1px solid {border_color} !important;
@@ -97,7 +97,7 @@ st.markdown(
         color: {text_muted} !important;
     }}
 
-    /* Multiselect Tags */
+    /* Multiselect Selected Tags (Blue Badge with White Text) */
     span[data-baseweb="tag"] {{
         background-color: #0284c7 !important;
         color: #ffffff !important;
@@ -107,13 +107,13 @@ st.markdown(
         color: #ffffff !important;
     }}
 
-    /* 4. Uniform Metric & Status Cards (4-Column Balanced Grid) */
+    /* Metric & Session Clock Cards */
     div[data-testid="stMetric"] {{
         background-color: {bg_card} !important;
         border: 1px solid {border_color} !important;
         border-radius: 10px !important;
-        padding: 10px 14px !important;
-        min-height: 82px !important;
+        padding: 12px 16px !important;
+        min-height: 86px !important;
         display: flex !important;
         flex-direction: column !important;
         justify-content: center !important;
@@ -121,19 +121,19 @@ st.markdown(
     }}
     div[data-testid="stMetricLabel"] * {{
         color: {text_muted} !important;
-        font-weight: 600 !important;
-        font-size: 0.76rem !important;
+        font-weight: 700 !important;
+        font-size: 0.80rem !important;
         text-transform: uppercase !important;
         letter-spacing: 0.5px !important;
     }}
     div[data-testid="stMetricValue"] * {{
         color: {text_main} !important;
-        font-weight: 700 !important;
-        font-size: 1.10rem !important;
+        font-weight: 800 !important;
+        font-size: 1.15rem !important;
         line-height: 1.25 !important;
     }}
 
-    /* Sub-Header Meta Badges */
+    /* Sub-Header Metadata Tags */
     .tn-meta-bar span {{
         background: {bg_card} !important;
         border: 1px solid {border_color} !important;
@@ -143,7 +143,7 @@ st.markdown(
         font-size: 0.82rem;
     }}
 
-    /* 5. Unified Clickable KPI Filter Tiles */
+    /* KPI Filter Cards */
     div.kpi-card-container button {{
         width: 100% !important;
         background-color: {bg_card} !important;
@@ -155,7 +155,7 @@ st.markdown(
         line-height: 1.35 !important;
         font-size: 0.95rem !important;
         font-weight: 700 !important;
-        min-height: 82px !important;
+        min-height: 86px !important;
         transition: all 0.15s ease-in-out !important;
         color: {text_main} !important;
     }}
@@ -182,16 +182,16 @@ st.markdown(
         color: #38bdf8 !important;
     }}
 
-    /* 6. Tabs Styling */
+    /* Tabs Navigation */
     button[data-testid="stTab"] {{
         background-color: transparent !important;
         border: none !important;
-        padding: 8px 14px !important;
+        padding: 8px 16px !important;
     }}
     button[data-testid="stTab"] p {{
         color: {text_muted} !important;
         font-weight: 600 !important;
-        font-size: 0.92rem !important;
+        font-size: 0.94rem !important;
     }}
     button[data-testid="stTab"][aria-selected="true"] {{
         border-bottom: 2px solid {active_tab_color} !important;
@@ -204,7 +204,7 @@ st.markdown(
         color: {text_main} !important;
     }}
 
-    /* 7. Expanders Dark/Light Cohesion */
+    /* Expanders */
     div[data-testid="stExpander"] {{
         background-color: {bg_card} !important;
         border: 1px solid {border_color} !important;
@@ -219,7 +219,7 @@ st.markdown(
         color: {text_main} !important;
     }}
 
-    /* 8. Floating Feedback Popover */
+    /* Floating Feedback Popover */
     div[data-testid="stPopover"] {{
         position: fixed;
         bottom: 24px;
@@ -310,14 +310,12 @@ if "filter_search" not in st.session_state:
     st.session_state.filter_search = ""
 
 def set_signal_filter(signal_name):
-    """Callback to set single signal filter cleanly before widget tree evaluation."""
     if signal_name == "ALL":
         st.session_state.filter_signals = ALL_SIGNAL_TYPES.copy()
     else:
         st.session_state.filter_signals = [signal_name]
 
 def reset_all_filters():
-    """Callback to restore all filters back to default values."""
     st.session_state.filter_signals = DEFAULT_ACTIVE_SIGNALS.copy()
     st.session_state.filter_rsi = (0.0, 100.0)
     st.session_state.filter_sma = "All Trends"
@@ -362,10 +360,10 @@ def get_tsx_market_status():
         rem_h, rem_rem = divmod(rem_sec, 3600)
         rem_m, rem_s = divmod(rem_rem, 60)
 
-        return "OPEN", "Regular Trading", f"{el_h:02d}:{el_m:02d}:{el_s:02d}", f"{rem_h:02d}:{rem_m:02d}:{rem_s:02d}"
+        return "OPEN", "Regular Trading Session", f"{el_h:02d}:{el_m:02d}:{el_s:02d}", f"{rem_h:02d}:{rem_m:02d}:{rem_s:02d}"
 
     else:
-        return "CLOSED", "Post-Session", "Session Ended", "Opens 9:30 AM ET next trading day"
+        return "CLOSED", "Market Closed (Post-Session)", "Session Ended", "Opens 9:30 AM ET next trading day"
 
 # -----------------------------------------------------------------------------
 # Resilient Data Loader with Cache-Busting & Diagnostics (TN-008 & TN-001)
@@ -478,9 +476,9 @@ def render_dashboard():
     # 1. Sidebar Header, Theme Switcher & Filters
     with st.sidebar:
         st.markdown(
-            """
+            f"""
             <div style="display: inline-flex; align-items: center; gap: 6px; margin-bottom: 8px;">
-                <h3 style="margin: 0; padding: 0; font-size: 1.45rem; font-weight: 800; line-height: 1;">TrendNorth 🇨🇦</h3>
+                <h3 style="margin: 0; padding: 0; font-size: 1.45rem; font-weight: 800; color: {text_title}; line-height: 1;">TrendNorth 🇨🇦</h3>
             </div>
             """,
             unsafe_allow_html=True,
@@ -541,7 +539,7 @@ def render_dashboard():
         st.caption("TrendNorth is an algorithmic research platform for TSX securities. All indicators and alerts are mathematical representations for self-directed screening and do not constitute financial advice.")
 
     # 2. Main Title & Session Clock Header
-    status_state, status_detail, elapsed_time, time_to_close = get_tsx_market_status()
+    status_label, status_detail, elapsed_time, time_to_close = get_tsx_market_status()
     scan_date_str = scan_time.strftime("%b %d, %Y — %I:%M %p ET") if scan_time else "Data Pending"
     today_et_str = datetime.now(ET_ZONE).strftime("%A, %B %d, %Y")
     now_time_et_str = datetime.now(ET_ZONE).strftime("%I:%M:%S %p ET")
@@ -558,16 +556,25 @@ def render_dashboard():
         unsafe_allow_html=True,
     )
 
-    # 4-Column Grid: Exactly Matches the 4-Column KPI Row Below It
-    col_stat1, col_stat2, col_stat3, col_stat4 = st.columns(4)
+    # 3 High-Visibility Balanced Cards with Clear English Labels
+    col_stat1, col_stat2, col_stat3 = st.columns([1.5, 1.25, 1.25])
     with col_stat1:
-        st.metric(label="TSX Status", value=f"● {status_state}")
+        st.metric(
+            label="TSX Market Status",
+            value=f"● {status_label}",
+            delta=status_detail,
+            delta_color="normal"
+        )
     with col_stat2:
-        st.metric(label="Session Detail", value=status_detail)
+        st.metric(
+            label="Session Time Elapsed",
+            value=elapsed_time
+        )
     with col_stat3:
-        st.metric(label="Counter (Elapsed)", value=elapsed_time)
-    with col_stat4:
-        st.metric(label="Time to Close", value=time_to_close)
+        st.metric(
+            label="Time Until Close",
+            value=time_to_close
+        )
 
     if df_raw.empty:
         st.warning("Waiting for scan data... Run the GitHub Actions workflow or execute `python ScreenStocksV1.py` locally.")
@@ -687,11 +694,11 @@ def render_dashboard():
                     return "color: #94a3b8;"
                 else:
                     if "BUY" in str(val):
-                        return "color: #15803d; background-color: #f0fdf4; font-weight: 700; border-radius: 4px;"
+                        return "color: #15803d; background-color: #dcfce7; font-weight: 700; border-radius: 4px;"
                     elif "SELL" in str(val):
-                        return "color: #b91c1c; background-color: #fef2f2; font-weight: 700; border-radius: 4px;"
+                        return "color: #b91c1c; background-color: #fee2e2; font-weight: 700; border-radius: 4px;"
                     elif "TRIM" in str(val):
-                        return "color: #b45309; background-color: #fffbeb; font-weight: 700; border-radius: 4px;"
+                        return "color: #b45309; background-color: #fef3c7; font-weight: 700; border-radius: 4px;"
                     return "color: #475569;"
 
             columns_order = [
@@ -699,7 +706,7 @@ def render_dashboard():
             ]
             display_cols = [c for c in columns_order if c in filtered_df.columns]
 
-            # Native Styler preserved with sorting & column controls
+            # Native pandas styling with theme-aware cells
             styled_df = (
                 filtered_df[display_cols]
                 .style.format({
@@ -711,7 +718,7 @@ def render_dashboard():
                 .map(signal_styler, subset=["Signal"])
             )
 
-            # Native Glide Data Grid: Full Asc/Desc column sorting, column resize, search, and CSV download
+            # Native Glide Data Grid: Full Asc/Desc column sorting, resize, search & export
             st.dataframe(styled_df, use_container_width=True, hide_index=True)
 
             st.download_button(
@@ -1024,7 +1031,7 @@ def render_dashboard():
                         "TRIM / TAKE PROFIT": "#f59e0b",
                         "KEEP / HOLD": "#64748b",
                     },
-                    template=plotly_theme,
+                    template=plotly_tpl,
                 )
                 fig_rsi.add_vline(x=40, line_dash="dot", line_color="#22c55e", annotation_text="Pullback (<=40)")
                 fig_rsi.add_vline(x=75, line_dash="dot", line_color="#ef4444", annotation_text="Overbought (>=75)")
@@ -1047,7 +1054,7 @@ def render_dashboard():
                         "TRIM / TAKE PROFIT": "#f59e0b",
                         "KEEP / HOLD": "#64748b",
                     },
-                    template=plotly_theme,
+                    template=plotly_tpl,
                 )
                 fig_scatter.update_layout(xaxis_title="50-Day SMA (CAD)", yaxis_title="Current Price (CAD)", height=420)
                 st.plotly_chart(fig_scatter, use_container_width=True)
