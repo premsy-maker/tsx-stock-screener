@@ -48,7 +48,7 @@ if "theme_mode" not in st.session_state:
 
 is_dark = "Dark" in st.session_state["theme_mode"]
 
-# Theme tokens
+# Dynamic Color Tokens
 bg_main = "#0b1120" if is_dark else "#f8fafc"
 bg_card = "#131d33" if is_dark else "#ffffff"
 bg_card_hover = "#1e293b" if is_dark else "#f1f5f9"
@@ -61,7 +61,7 @@ plotly_theme = "plotly_dark" if is_dark else "plotly_white"
 st.markdown(
     f"""
     <style>
-    /* 1. Global CSS Root Token Overrides (Drives DataFrames, Inputs, Canvas) */
+    /* 1. Global CSS Root Token Overrides */
     :root {{
         --background-color: {bg_main} !important;
         --secondary-background-color: {bg_card} !important;
@@ -96,7 +96,7 @@ st.markdown(
     }}
 
     .block-container {{
-        padding-top: 2rem !important;
+        padding-top: 1.8rem !important;
         padding-bottom: 3rem !important;
     }}
 
@@ -126,7 +126,7 @@ st.markdown(
         font-size: 0.85rem;
     }}
 
-    /* 7. All Secondary Buttons (Refresh, KPI Tiles, Clear All Filters) */
+    /* 7. Secondary Buttons (Refresh, KPI Tiles, Clear Filters) */
     button[kind="secondary"] {{
         background-color: {bg_card} !important;
         border: 1px solid {border_color} !important;
@@ -143,7 +143,7 @@ st.markdown(
         color: inherit !important;
     }}
 
-    /* KPI Tiles Specific Typography */
+    /* KPI Tiles Typography & Spacing */
     div.kpi-card-container button {{
         min-height: 84px !important;
         padding: 12px 16px !important;
@@ -163,14 +163,7 @@ st.markdown(
         color: {text_main} !important;
     }}
 
-    /* 9. Dataframe / Table Container */
-    div[data-testid="stDataFrame"] {{
-        background-color: {bg_card} !important;
-        border: 1px solid {border_color} !important;
-        border-radius: 8px !important;
-    }}
-
-    /* 10. Floating Feedback Popover */
+    /* 9. Floating Feedback Popover */
     div[data-testid="stPopover"] {{
         position: fixed;
         bottom: 24px;
@@ -187,7 +180,7 @@ COMPANY_NAMES = {
     "XEQT.TO": "iShares Core Equity ETF Portfolio",
     "XIU.TO": "iShares S&P/TSX 60 Index ETF",
     "RY.TO": "Royal Bank of Canada",
-    "TD.TO": "Toronto-Dominion Bank",
+    "TD.TO": "Toronto-要因Bank",
     "BMO.TO": "Bank of Montreal",
     "BNS.TO": "Bank of Nova Scotia",
     "CM.TO": "Canadian Imperial Bank of Commerce",
@@ -618,7 +611,7 @@ def render_dashboard():
     )
 
     # -------------------------------------------------------------------------
-    # TAB 1: Filtered Watchlist (Theme-Aware Cell & Row Styling)
+    # TAB 1: Filtered Watchlist (Theme-Aware Terminal Table)
     # -------------------------------------------------------------------------
     with tab_data:
         col_tab_info, col_clear = st.columns([7.5, 2.5])
@@ -629,41 +622,72 @@ def render_dashboard():
         if filtered_df.empty:
             st.info("No TSX assets match your selected filter criteria.")
         else:
-            def signal_styler(val):
-                if is_dark:
-                    if "BUY" in str(val):
-                        return "color: #4ade80; background-color: rgba(34, 197, 94, 0.20); font-weight: 700; border-radius: 4px;"
-                    elif "SELL" in str(val):
-                        return "color: #f87171; background-color: rgba(239, 68, 68, 0.20); font-weight: 700; border-radius: 4px;"
-                    elif "TRIM" in str(val):
-                        return "color: #fbbf24; background-color: rgba(245, 158, 11, 0.20); font-weight: 700; border-radius: 4px;"
-                    return "color: #94a3b8;"
-                else:
-                    if "BUY" in str(val):
-                        return "color: #15803d; background-color: #f0fdf4; font-weight: 700; border-radius: 4px;"
-                    elif "SELL" in str(val):
-                        return "color: #b91c1c; background-color: #fef2f2; font-weight: 700; border-radius: 4px;"
-                    elif "TRIM" in str(val):
-                        return "color: #b45309; background-color: #fffbeb; font-weight: 700; border-radius: 4px;"
-                    return "color: #475569;"
-
             columns_order = [
                 "Symbol", "Company", "Price", "Signal", "RSI_14", "SMA_50", "SMA_200", "Rationale"
             ]
             display_cols = [c for c in columns_order if c in filtered_df.columns]
+            table_df = filtered_df[display_cols].copy()
 
-            styled_df = (
-                filtered_df[display_cols]
-                .style.format({
-                    "Price": "${:.2f}",
-                    "SMA_50": "${:.2f}",
-                    "SMA_200": "${:.2f}",
-                    "RSI_14": "{:.1f}",
-                })
-                .map(signal_styler, subset=["Signal"])
-            )
+            def get_signal_badge(sig):
+                sig_str = str(sig).strip()
+                if "BUY" in sig_str:
+                    bg = "rgba(34, 197, 94, 0.18)" if is_dark else "#dcfce7"
+                    fg = "#4ade80" if is_dark else "#15803d"
+                elif "SELL" in sig_str:
+                    bg = "rgba(239, 68, 68, 0.18)" if is_dark else "#fee2e2"
+                    fg = "#f87171" if is_dark else "#b91c1c"
+                elif "TRIM" in sig_str:
+                    bg = "rgba(245, 158, 11, 0.18)" if is_dark else "#fef3c7"
+                    fg = "#fbbf24" if is_dark else "#b45309"
+                else:
+                    bg = "rgba(148, 163, 184, 0.12)" if is_dark else "#f1f5f9"
+                    fg = "#94a3b8" if is_dark else "#475569"
+                return f'<span style="background:{bg}; color:{fg}; font-weight:700; padding:3px 8px; border-radius:4px; font-size:0.82rem;">{sig_str}</span>'
 
-            st.dataframe(styled_df, use_container_width=True, hide_index=True)
+            rows_html = ""
+            for idx, r in table_df.iterrows():
+                row_bg_color = bg_card if (idx % 2 == 0) else (bg_main if is_dark else "#f8fafc")
+                price_val = f"${r['Price']:.2f}" if pd.notna(r.get("Price")) else "—"
+                sma50_val = f"${r['SMA_50']:.2f}" if pd.notna(r.get("SMA_50")) else "—"
+                sma200_val = f"${r['SMA_200']:.2f}" if pd.notna(r.get("SMA_200")) else "—"
+                rsi_val = f"{r['RSI_14']:.1f}" if pd.notna(r.get("RSI_14")) else "—"
+                badge = get_signal_badge(r.get("Signal", "—"))
+
+                rows_html += f"""
+                <tr style="background-color: {row_bg_color}; border-bottom: 1px solid {border_color};">
+                    <td style="padding: 10px 14px; font-weight: 700; color: {text_main};">{r.get('Symbol', '—')}</td>
+                    <td style="padding: 10px 14px; color: {text_main};">{r.get('Company', '—')}</td>
+                    <td style="padding: 10px 14px; color: {text_main}; text-align: right; font-variant-numeric: tabular-nums;">{price_val}</td>
+                    <td style="padding: 10px 14px; text-align: center;">{badge}</td>
+                    <td style="padding: 10px 14px; color: {text_muted}; text-align: right; font-variant-numeric: tabular-nums;">{rsi_val}</td>
+                    <td style="padding: 10px 14px; color: {text_main}; text-align: right; font-variant-numeric: tabular-nums;">{sma50_val}</td>
+                    <td style="padding: 10px 14px; color: {text_main}; text-align: right; font-variant-numeric: tabular-nums;">{sma200_val}</td>
+                    <td style="padding: 10px 14px; color: {text_muted}; font-size: 0.86rem;">{r.get('Rationale', '—')}</td>
+                </tr>
+                """
+
+            table_html = f"""
+            <div style="width: 100%; overflow-x: auto; border: 1px solid {border_color}; border-radius: 8px; margin-top: 8px; margin-bottom: 16px;">
+                <table style="width: 100%; border-collapse: collapse; font-size: 0.90rem; text-align: left; font-family: inherit;">
+                    <thead>
+                        <tr style="background-color: {'#080e1a' if is_dark else '#f1f5f9'}; border-bottom: 1px solid {border_color};">
+                            <th style="padding: 11px 14px; color: {text_muted}; font-weight: 600; text-transform: uppercase; font-size: 0.78rem;">Symbol</th>
+                            <th style="padding: 11px 14px; color: {text_muted}; font-weight: 600; text-transform: uppercase; font-size: 0.78rem;">Company</th>
+                            <th style="padding: 11px 14px; color: {text_muted}; font-weight: 600; text-transform: uppercase; font-size: 0.78rem; text-align: right;">Price</th>
+                            <th style="padding: 11px 14px; color: {text_muted}; font-weight: 600; text-transform: uppercase; font-size: 0.78rem; text-align: center;">Signal</th>
+                            <th style="padding: 11px 14px; color: {text_muted}; font-weight: 600; text-transform: uppercase; font-size: 0.78rem; text-align: right;">RSI_14</th>
+                            <th style="padding: 11px 14px; color: {text_muted}; font-weight: 600; text-transform: uppercase; font-size: 0.78rem; text-align: right;">SMA_50</th>
+                            <th style="padding: 11px 14px; color: {text_muted}; font-weight: 600; text-transform: uppercase; font-size: 0.78rem; text-align: right;">SMA_200</th>
+                            <th style="padding: 11px 14px; color: {text_muted}; font-weight: 600; text-transform: uppercase; font-size: 0.78rem;">Rationale</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {rows_html}
+                    </tbody>
+                </table>
+            </div>
+            """
+            st.markdown(table_html, unsafe_allow_html=True)
 
             st.download_button(
                 label="📥 Export Filtered Watchlist (CSV)",
@@ -816,8 +840,15 @@ def render_dashboard():
                 "Market Value", "Unrealized P&L ($)", "Return (%)", "Target Price", "Status", "Live Signal"
             ]]
 
+            port_row_bg = "#111827" if is_dark else "#ffffff"
+            port_text_color = "#f9fafb" if is_dark else "#111827"
+
             event = st.dataframe(
-                display_port.style.format({
+                display_port.style.set_properties(**{
+                    "background-color": port_row_bg,
+                    "color": port_text_color,
+                    "border-color": border_color,
+                }).format({
                     "Buy Price": "${:.2f}",
                     "Current Price": "${:.2f}",
                     "Market Value": "${:,.2f}",
