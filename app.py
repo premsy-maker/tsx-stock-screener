@@ -41,38 +41,57 @@ st.set_page_config(
 )
 
 # -----------------------------------------------------------------------------
-# Theming State & Cohesive CSS (TN-019)
+# Dynamic Dual-Theme Engine (TN-019)
 # -----------------------------------------------------------------------------
 if "theme_mode" not in st.session_state:
     st.session_state["theme_mode"] = "Dark (Terminal) 🌙"
 
 is_dark = "Dark" in st.session_state["theme_mode"]
 
-# Dynamic palette tokens
-bg_main = "#0b1120" if is_dark else "#f8fafc"
-bg_card = "#131d33" if is_dark else "#ffffff"
-bg_card_hover = "#1e293b" if is_dark else "#f1f5f9"
-bg_sidebar = "#070c18" if is_dark else "#f8fafc"
-border_color = "#243556" if is_dark else "#e2e8f0"
-text_main = "#f8fafc" if is_dark else "#0f172a"
-text_muted = "#94a3b8" if is_dark else "#475569"
-active_tab_color = "#38bdf8" if is_dark else "#0284c7"
-plotly_theme = "plotly_dark" if is_dark else "plotly_white"
+# Exact Palette Definitions mapped globally
+if is_dark:
+    bg_app = "#090d16"
+    bg_card = "#111827"
+    bg_card_hover = "#1e293b"
+    bg_sidebar = "#060911"
+    border_col = "#1f2937"
+    text_title = "#f9fafb"
+    text_sub = "#9ca3af"
+    table_cell_bg = "#111827"
+    table_text = "#f9fafb"
+    input_bg = "#1f2937"
+    input_text = "#f9fafb"
+    plotly_tpl = "plotly_dark"
+    active_tab_color = "#38bdf8"
+else:
+    bg_app = "#f8fafc"
+    bg_card = "#ffffff"
+    bg_card_hover = "#f1f5f9"
+    bg_sidebar = "#f1f5f9"
+    border_col = "#e2e8f0"
+    text_title = "#0f172a"
+    text_sub = "#475569"
+    table_cell_bg = "#ffffff"
+    table_text = "#0f172a"
+    input_bg = "#ffffff"
+    input_text = "#0f172a"
+    plotly_tpl = "plotly_white"
+    active_tab_color = "#0284c7"
 
 st.markdown(
     f"""
     <style>
-    /* Global Page Background & Header Toolbar */
+    /* Global App Background & Text */
     .stApp {{
-        background-color: {bg_main} !important;
-        color: {text_main} !important;
+        background-color: {bg_app} !important;
+        color: {text_title} !important;
     }}
     header[data-testid="stHeader"] {{
-        background-color: {bg_main} !important;
-        border-bottom: 1px solid {border_color} !important;
+        background-color: {bg_app} !important;
+        border-bottom: 1px solid {border_col} !important;
     }}
     header[data-testid="stHeader"] * {{
-        color: {text_main} !important;
+        color: {text_title} !important;
     }}
 
     /* Container Spacing */
@@ -84,20 +103,31 @@ st.markdown(
     /* Sidebar Theming */
     section[data-testid="stSidebar"] {{
         background-color: {bg_sidebar} !important;
-        border-right: 1px solid {border_color} !important;
+        border-right: 1px solid {border_col} !important;
     }}
     section[data-testid="stSidebar"] h1, 
     section[data-testid="stSidebar"] h2, 
     section[data-testid="stSidebar"] h3, 
     section[data-testid="stSidebar"] label,
     section[data-testid="stSidebar"] p {{
-        color: {text_main} !important;
+        color: {text_title} !important;
     }}
     section[data-testid="stSidebar"] .stCaption {{
-        color: {text_muted} !important;
+        color: {text_sub} !important;
     }}
 
-    /* Multiselect Selected Tags (Blue Badge with White Text) */
+    /* Inputs, Text Boxes, Dropdowns in Active Theme */
+    div[data-baseweb="input"], div[data-baseweb="select"] {{
+        background-color: {input_bg} !important;
+        border: 1px solid {border_col} !important;
+        border-radius: 6px !important;
+    }}
+    div[data-baseweb="input"] input, div[data-baseweb="select"] * {{
+        color: {input_text} !important;
+        background-color: transparent !important;
+    }}
+
+    /* Multiselect Tags (Always Crisp Blue Badges) */
     span[data-baseweb="tag"] {{
         background-color: #0284c7 !important;
         color: #ffffff !important;
@@ -107,79 +137,79 @@ st.markdown(
         color: #ffffff !important;
     }}
 
-    /* Metric & Session Clock Cards */
+    /* Top Sub-Header Meta Tags */
+    .tn-meta-bar span {{
+        background: {bg_card} !important;
+        border: 1px solid {border_col} !important;
+        padding: 5px 12px;
+        border-radius: 6px;
+        color: {text_sub} !important;
+        font-size: 0.85rem;
+    }}
+
+    /* Top Status & Session Clock Metrics */
     div[data-testid="stMetric"] {{
         background-color: {bg_card} !important;
-        border: 1px solid {border_color} !important;
+        border: 1px solid {border_col} !important;
         border-radius: 10px !important;
         padding: 12px 16px !important;
-        min-height: 86px !important;
+        min-height: 84px !important;
         display: flex !important;
         flex-direction: column !important;
         justify-content: center !important;
         box-shadow: 0 1px 3px rgba(0,0,0,0.02) !important;
     }}
     div[data-testid="stMetricLabel"] * {{
-        color: {text_muted} !important;
+        color: {text_sub} !important;
         font-weight: 700 !important;
-        font-size: 0.80rem !important;
+        font-size: 0.78rem !important;
         text-transform: uppercase !important;
         letter-spacing: 0.5px !important;
     }}
     div[data-testid="stMetricValue"] * {{
-        color: {text_main} !important;
+        color: {text_title} !important;
         font-weight: 800 !important;
-        font-size: 1.15rem !important;
+        font-size: 1.12rem !important;
         line-height: 1.25 !important;
     }}
 
-    /* Sub-Header Metadata Tags */
-    .tn-meta-bar span {{
-        background: {bg_card} !important;
-        border: 1px solid {border_color} !important;
-        padding: 4px 10px;
-        border-radius: 6px;
-        color: {text_muted} !important;
-        font-size: 0.82rem;
-    }}
-
-    /* KPI Filter Cards */
+    /* Interactive Embedded KPI Cards */
     div.kpi-card-container button {{
         width: 100% !important;
         background-color: {bg_card} !important;
-        border: 1px solid {border_color} !important;
+        border: 1px solid {border_col} !important;
         border-radius: 10px !important;
-        padding: 12px 14px !important;
+        padding: 12px 16px !important;
         text-align: left !important;
         white-space: pre-line !important;
         line-height: 1.35 !important;
         font-size: 0.95rem !important;
         font-weight: 700 !important;
-        min-height: 86px !important;
+        min-height: 84px !important;
         transition: all 0.15s ease-in-out !important;
-        color: {text_main} !important;
+        color: {text_title} !important;
     }}
     div.kpi-card-container button:hover {{
-        border-color: #38bdf8 !important;
+        border-color: #0284c7 !important;
         background-color: {bg_card_hover} !important;
         transform: translateY(-1px);
-        box-shadow: 0 4px 10px rgba(56, 189, 248, 0.12) !important;
+        box-shadow: 0 4px 10px rgba(2, 132, 199, 0.12) !important;
     }}
     div.kpi-card-container button p {{
-        color: {text_main} !important;
+        color: {text_title} !important;
     }}
 
-    /* Secondary Action Buttons */
+    /* Secondary Buttons */
     button[kind="secondary"] {{
         background-color: {bg_card} !important;
-        border: 1px solid {border_color} !important;
-        color: {text_main} !important;
+        border: 1px solid {border_col} !important;
+        color: {text_title} !important;
         border-radius: 8px !important;
     }}
     button[kind="secondary"]:hover {{
         background-color: {bg_card_hover} !important;
-        border-color: #38bdf8 !important;
-        color: #38bdf8 !important;
+        border-color: #0284c7 !important;
+        color: #0284c7 !important;
     }}
 
     /* Tabs Navigation */
@@ -189,7 +219,7 @@ st.markdown(
         padding: 8px 16px !important;
     }}
     button[data-testid="stTab"] p {{
-        color: {text_muted} !important;
+        color: {text_sub} !important;
         font-weight: 600 !important;
         font-size: 0.94rem !important;
     }}
@@ -201,22 +231,22 @@ st.markdown(
         font-weight: 700 !important;
     }}
     button[data-testid="stTab"]:hover p {{
-        color: {text_main} !important;
+        color: {text_title} !important;
     }}
 
     /* Expanders */
     div[data-testid="stExpander"] {{
         background-color: {bg_card} !important;
-        border: 1px solid {border_color} !important;
+        border: 1px solid {border_col} !important;
         border-radius: 8px !important;
     }}
     div[data-testid="stExpander"] summary,
     div[data-testid="stExpander"] div[role="region"] {{
         background-color: {bg_card} !important;
-        color: {text_main} !important;
+        color: {text_title} !important;
     }}
     div[data-testid="stExpander"] * {{
-        color: {text_main} !important;
+        color: {text_title} !important;
     }}
 
     /* Floating Feedback Popover */
@@ -556,7 +586,7 @@ def render_dashboard():
         unsafe_allow_html=True,
     )
 
-    # 3 High-Visibility Balanced Cards with Clear English Labels
+    # 3 High-Visibility Balanced Cards
     col_stat1, col_stat2, col_stat3 = st.columns([1.5, 1.25, 1.25])
     with col_stat1:
         st.metric(
@@ -709,7 +739,12 @@ def render_dashboard():
             # Native pandas styling with theme-aware cells
             styled_df = (
                 filtered_df[display_cols]
-                .style.format({
+                .style.set_properties(**{
+                    "background-color": table_cell_bg,
+                    "color": table_text,
+                    "border-color": border_col,
+                })
+                .format({
                     "Price": "${:.2f}",
                     "SMA_50": "${:.2f}",
                     "SMA_200": "${:.2f}",
@@ -873,7 +908,11 @@ def render_dashboard():
             ]]
 
             event = st.dataframe(
-                display_port.style.format({
+                display_port.style.set_properties(**{
+                    "background-color": table_cell_bg,
+                    "color": table_text,
+                    "border-color": border_col,
+                }).format({
                     "Buy Price": "${:.2f}",
                     "Current Price": "${:.2f}",
                     "Market Value": "${:,.2f}",
