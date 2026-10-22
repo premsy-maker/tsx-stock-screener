@@ -41,117 +41,136 @@ st.set_page_config(
 )
 
 # -----------------------------------------------------------------------------
-# Theming State & Cohesive Full-Portal Theming (TN-019)
+# Theming State & Cohesive CSS Variable Injection (TN-019)
 # -----------------------------------------------------------------------------
 if "theme_mode" not in st.session_state:
     st.session_state["theme_mode"] = "Dark (Terminal) 🌙"
 
 is_dark = "Dark" in st.session_state["theme_mode"]
 
-# Dynamic Color Tokens
-theme_bg = "#0b1120" if is_dark else "#f8fafc"
-sidebar_bg = "#070c18" if is_dark else "#ffffff"
-card_bg = "#131d33" if is_dark else "#ffffff"
-card_hover = "#1a2744" if is_dark else "#f1f5f9"
-card_border = "#243556" if is_dark else "#e2e8f0"
-text_primary = "#f8fafc" if is_dark else "#0f172a"
-text_secondary = "#94a3b8" if is_dark else "#64748b"
-btn_text_color = "#e2e8f0" if is_dark else "#0f172a"
+# Theme tokens
+bg_main = "#0b1120" if is_dark else "#f8fafc"
+bg_card = "#131d33" if is_dark else "#ffffff"
+bg_card_hover = "#1e293b" if is_dark else "#f1f5f9"
+bg_sidebar = "#070c18" if is_dark else "#ffffff"
+border_color = "#243556" if is_dark else "#e2e8f0"
+text_main = "#f8fafc" if is_dark else "#0f172a"
+text_muted = "#94a3b8" if is_dark else "#64748b"
 plotly_theme = "plotly_dark" if is_dark else "plotly_white"
 
 st.markdown(
     f"""
     <style>
-    /* Full App & Sidebar Theme */
-    .stApp {{
-        background-color: {theme_bg} !important;
-        color: {text_primary} !important;
+    /* 1. Global CSS Root Token Overrides (Drives DataFrames, Inputs, Canvas) */
+    :root {{
+        --background-color: {bg_main} !important;
+        --secondary-background-color: {bg_card} !important;
+        --text-color: {text_main} !important;
     }}
+
+    /* 2. Top Streamlit Header Toolbar (Eliminates Top White Bar) */
+    header[data-testid="stHeader"] {{
+        background-color: {bg_main} !important;
+        border-bottom: 1px solid {border_color} !important;
+    }}
+    header[data-testid="stHeader"] * {{
+        color: {text_main} !important;
+    }}
+
+    /* 3. Full App Background */
+    .stApp {{
+        background-color: {bg_main} !important;
+        color: {text_main} !important;
+    }}
+
+    /* 4. Sidebar Cohesion */
     section[data-testid="stSidebar"] {{
-        background-color: {sidebar_bg} !important;
-        border-right: 1px solid {card_border} !important;
+        background-color: {bg_sidebar} !important;
+        border-right: 1px solid {border_color} !important;
     }}
     section[data-testid="stSidebar"] * {{
-        color: {text_primary} !important;
+        color: {text_main} !important;
     }}
     section[data-testid="stSidebar"] .stCaption {{
-        color: {text_secondary} !important;
+        color: {text_muted} !important;
     }}
 
     .block-container {{
-        padding-top: 1.8rem !important;
+        padding-top: 2rem !important;
         padding-bottom: 3rem !important;
     }}
 
-    /* Global Headings & Typography */
-    h1, h2, h3, h4, h5, h6, span, label, p {{
-        color: {text_primary} !important;
-    }}
-
-    /* Metrics & Session Clocks */
+    /* 5. Metrics & Session Clocks */
     div[data-testid="stMetric"] {{
-        background-color: {card_bg} !important;
-        border: 1px solid {card_border} !important;
+        background-color: {bg_card} !important;
+        border: 1px solid {border_color} !important;
         border-radius: 10px !important;
         padding: 10px 14px !important;
     }}
     div[data-testid="stMetricLabel"] * {{
-        color: {text_secondary} !important;
+        color: {text_muted} !important;
         font-weight: 600 !important;
     }}
     div[data-testid="stMetricValue"] * {{
-        color: {text_primary} !important;
+        color: {text_main} !important;
         font-weight: 800 !important;
     }}
 
-    /* Sub-header meta bar */
+    /* 6. Sub-Header Metadata Bar */
     .tn-meta-bar span {{
-        background: {card_bg} !important;
-        border: 1px solid {card_border} !important;
+        background: {bg_card} !important;
+        border: 1px solid {border_color} !important;
         padding: 4px 10px;
         border-radius: 6px;
-        color: {text_secondary} !important;
+        color: {text_muted} !important;
         font-size: 0.85rem;
     }}
 
-    /* Interactive KPI Metric Card Buttons */
+    /* 7. All Secondary Buttons (Refresh, KPI Tiles, Clear All Filters) */
+    button[kind="secondary"] {{
+        background-color: {bg_card} !important;
+        border: 1px solid {border_color} !important;
+        color: {text_main} !important;
+        border-radius: 8px !important;
+        transition: all 0.15s ease-in-out !important;
+    }}
+    button[kind="secondary"]:hover {{
+        background-color: {bg_card_hover} !important;
+        border-color: #3b82f6 !important;
+        color: #60a5fa !important;
+    }}
+    button[kind="secondary"] * {{
+        color: inherit !important;
+    }}
+
+    /* KPI Tiles Specific Typography */
     div.kpi-card-container button {{
-        width: 100% !important;
-        background-color: {card_bg} !important;
-        border: 1px solid {card_border} !important;
-        border-radius: 10px !important;
+        min-height: 84px !important;
         padding: 12px 16px !important;
         text-align: left !important;
         white-space: pre-line !important;
-        line-height: 1.35 !important;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.02) !important;
-        transition: all 0.15s ease-in-out !important;
-        min-height: 84px !important;
-    }}
-    div.kpi-card-container button p {{
-        color: {btn_text_color} !important;
-        font-weight: 700 !important;
+        line-height: 1.4 !important;
         font-size: 1.05rem !important;
-    }}
-    div.kpi-card-container button:hover {{
-        border-color: #3b82f6 !important;
-        background-color: {card_hover} !important;
-        transform: translateY(-1px);
-        box-shadow: 0 4px 12px rgba(59, 130, 246, 0.15) !important;
-    }}
-    div.kpi-card-container button:hover p {{
-        color: #60a5fa !important;
+        font-weight: 700 !important;
     }}
 
-    /* Dataframe Table Container */
+    /* 8. Text Inputs & Form Fields */
+    div[data-baseweb="input"] {{
+        background-color: {bg_card} !important;
+        border-color: {border_color} !important;
+    }}
+    div[data-baseweb="input"] input {{
+        color: {text_main} !important;
+    }}
+
+    /* 9. Dataframe / Table Container */
     div[data-testid="stDataFrame"] {{
-        background-color: {card_bg} !important;
-        border: 1px solid {card_border} !important;
+        background-color: {bg_card} !important;
+        border: 1px solid {border_color} !important;
         border-radius: 8px !important;
-        padding: 4px !important;
     }}
 
-    /* Floating Feedback Popover */
+    /* 10. Floating Feedback Popover */
     div[data-testid="stPopover"] {{
         position: fixed;
         bottom: 24px;
@@ -242,7 +261,7 @@ if "filter_search" not in st.session_state:
     st.session_state.filter_search = ""
 
 def set_signal_filter(signal_name):
-    """Callback to set single signal filter cleanly before rerun."""
+    """Callback to set single signal filter cleanly before widget execution."""
     if signal_name == "ALL":
         st.session_state.filter_signals = ALL_SIGNAL_TYPES.copy()
     else:
@@ -532,7 +551,7 @@ def render_dashboard():
             | filtered_df["Company"].str.contains(search_query, case=False, na=False)
         ]
 
-    # Check if any filters are active
+    # Verify if any non-default filters are active
     has_active_filters = (
         set(selected_signals) != set(available_signals)
         or rsi_range != (0.0, 100.0)
@@ -540,7 +559,7 @@ def render_dashboard():
         or bool(search_query)
     )
 
-    # 3. Interactive Embedded Metric Cards (Dark/Light Responsive)
+    # 3. Interactive Embedded Metric Cards
     m_col1, m_col2, m_col3, m_col4 = st.columns(4)
 
     with m_col1:
@@ -610,10 +629,6 @@ def render_dashboard():
         if filtered_df.empty:
             st.info("No TSX assets match your selected filter criteria.")
         else:
-            # Theme-aware row and cell styling
-            row_bg = "#111827" if is_dark else "#ffffff"
-            text_color = "#f9fafb" if is_dark else "#111827"
-
             def signal_styler(val):
                 if is_dark:
                     if "BUY" in str(val):
@@ -639,12 +654,7 @@ def render_dashboard():
 
             styled_df = (
                 filtered_df[display_cols]
-                .style.set_properties(**{
-                    "background-color": row_bg,
-                    "color": text_color,
-                    "border-color": card_border,
-                })
-                .format({
+                .style.format({
                     "Price": "${:.2f}",
                     "SMA_50": "${:.2f}",
                     "SMA_200": "${:.2f}",
@@ -806,15 +816,8 @@ def render_dashboard():
                 "Market Value", "Unrealized P&L ($)", "Return (%)", "Target Price", "Status", "Live Signal"
             ]]
 
-            port_row_bg = "#111827" if is_dark else "#ffffff"
-            port_text_color = "#f9fafb" if is_dark else "#111827"
-
             event = st.dataframe(
-                display_port.style.set_properties(**{
-                    "background-color": port_row_bg,
-                    "color": port_text_color,
-                    "border-color": card_border,
-                }).format({
+                display_port.style.format({
                     "Buy Price": "${:.2f}",
                     "Current Price": "${:.2f}",
                     "Market Value": "${:,.2f}",
