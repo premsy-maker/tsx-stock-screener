@@ -40,7 +40,7 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# Custom UI Styling (Fintech Terminal Look & Snug Brand Alignments)
+# Custom UI Styling (Fintech Terminal Look & Interactive Filter Tiles)
 st.markdown(
     """
     <style>
@@ -50,33 +50,29 @@ st.markdown(
         padding-bottom: 3rem !important;
     }
 
-    /* Metric Cards */
-    div[data-testid="stMetric"] {
-        background: #ffffff;
-        border: 1px solid #e2e8f0;
-        padding: 12px 16px;
-        border-radius: 10px;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.02);
-    }
-    div[data-testid="stMetricLabel"] > div {
-        font-size: 0.82rem !important;
-        font-weight: 600 !important;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-        color: #64748b !important;
-    }
-    div[data-testid="stMetricValue"] > div {
-        font-size: 1.6rem !important;
-        font-weight: 800 !important;
-        color: #0f172a !important;
-    }
-
     /* Floating Feedback Popover */
     div[data-testid="stPopover"] {
         position: fixed;
         bottom: 24px;
         right: 24px;
         z-index: 999999;
+    }
+
+    /* Interactive Metric Button Cards */
+    div[data-testid="stColumn"] button {
+        text-align: left !important;
+        border-radius: 10px !important;
+        border: 1px solid #e2e8f0 !important;
+        background-color: #ffffff !important;
+        padding: 10px 14px !important;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.02) !important;
+        transition: all 0.15s ease-in-out !important;
+    }
+    div[data-testid="stColumn"] button:hover {
+        border-color: #cbd5e1 !important;
+        background-color: #f8fafc !important;
+        transform: translateY(-1px);
+        box-shadow: 0 3px 6px rgba(0,0,0,0.04) !important;
     }
     </style>
     """,
@@ -145,6 +141,25 @@ COMPANY_NAMES = {
     "FM.TO": "First Quantum Minerals",
     "K.TO": "Kinross Gold",
 }
+
+ALL_SIGNAL_TYPES = ["BUY / ACCUMULATE", "SELL / EXIT", "TRIM / TAKE PROFIT", "KEEP / HOLD"]
+DEFAULT_ACTIVE_SIGNALS = ["BUY / ACCUMULATE", "SELL / EXIT", "TRIM / TAKE PROFIT"]
+
+# Initialize Interactive Filter Session States
+if "filter_signals" not in st.session_state:
+    st.session_state.filter_signals = DEFAULT_ACTIVE_SIGNALS.copy()
+if "filter_rsi" not in st.session_state:
+    st.session_state.filter_rsi = (0.0, 100.0)
+if "filter_sma" not in st.session_state:
+    st.session_state.filter_sma = "All Trends"
+if "filter_search" not in st.session_state:
+    st.session_state.filter_search = ""
+
+def reset_all_filters():
+    st.session_state.filter_signals = DEFAULT_ACTIVE_SIGNALS.copy()
+    st.session_state.filter_rsi = (0.0, 100.0)
+    st.session_state.filter_sma = "All Trends"
+    st.session_state.filter_search = ""
 
 # -----------------------------------------------------------------------------
 # TSX Market Session Hours Helper
@@ -322,20 +337,34 @@ def render_dashboard():
         if not df_raw.empty and "Signal" in df_raw.columns:
             available_signals = sorted(list(df_raw["Signal"].dropna().unique()))
         else:
-            available_signals = ["BUY / ACCUMULATE", "SELL / EXIT", "TRIM / TAKE PROFIT", "KEEP / HOLD"]
+            available_signals = ALL_SIGNAL_TYPES
 
-        default_signals = [s for s in ["BUY / ACCUMULATE", "SELL / EXIT", "TRIM / TAKE PROFIT"] if s in available_signals]
-        selected_signals = st.multiselect("Signal Classification", options=available_signals, default=default_signals)
+        # Filter widgets bound directly to session_state
+        selected_signals = st.multiselect(
+            "Signal Classification",
+            options=available_signals,
+            key="filter_signals",
+        )
 
-        rsi_range = st.slider("14-Day RSI Window", min_value=0.0, max_value=100.0, value=(0.0, 100.0), step=1.0)
+        rsi_range = st.slider(
+            "14-Day RSI Window",
+            min_value=0.0,
+            max_value=100.0,
+            step=1.0,
+            key="filter_rsi",
+        )
 
         sma_trend = st.radio(
             "SMA Trend Configuration",
             options=["All Trends", "Bullish (SMA 50 > SMA 200)", "Bearish / Death Cross (SMA 50 < SMA 200)"],
-            index=0,
+            key="filter_sma",
         )
 
-        search_query = st.text_input("Find Symbol or Company", placeholder="e.g. SHOP, BMO, Enbridge").strip().upper()
+        search_query = st.text_input(
+            "Find Symbol or Company",
+            placeholder="e.g. SHOP, BMO, Enbridge",
+            key="filter_search",
+        ).strip().upper()
 
         st.markdown("---")
         st.caption("ℹ️ **Educational / Non-Financial Advice Disclaimer**")
@@ -377,7 +406,12 @@ def render_dashboard():
         st.warning("Waiting for scan data... Run the GitHub Actions workflow or execute `python ScreenStocksV1.py` locally.")
         return
 
-    # Watchlist Filtering
+    # Total counts across entire 59 universe
+    buy_all_cnt = len(df_raw[df_raw["Signal"] == "BUY / ACCUMULATE"])
+    sell_all_cnt = len(df_raw[df_raw["Signal"] == "SELL / EXIT"])
+    trim_all_cnt = len(df_raw[df_raw["Signal"] == "TRIM / TAKE PROFIT"])
+
+    # Watchlist Filtering Application
     filtered_df = df_raw.copy()
     if selected_signals:
         filtered_df = filtered_df[filtered_df["Signal"].isin(selected_signals)]
@@ -397,19 +431,54 @@ def render_dashboard():
             | filtered_df["Company"].str.contains(search_query, case=False, na=False)
         ]
 
-    # Metrics Summary Bar (Fintech-Card Styled)
+    # Check if any filters are active
+    has_active_filters = (
+        set(selected_signals) != set(available_signals)
+        or rsi_range != (0.0, 100.0)
+        or sma_trend != "All Trends"
+        or bool(search_query)
+    )
+
+    # -------------------------------------------------------------------------
+    # Interactive KPI Cards (Click to Filter Table)
+    # -------------------------------------------------------------------------
     m_col1, m_col2, m_col3, m_col4 = st.columns(4)
+
     with m_col1:
-        st.metric("Watchlist Displayed", f"{len(filtered_df)} / {len(df_raw)}")
+        if st.button(
+            f"**WATCHLIST DISPLAYED**\n\n### {len(filtered_df)} / {len(df_raw)}",
+            use_container_width=True,
+            help="Click to show all stocks in the universe"
+        ):
+            st.session_state.filter_signals = available_signals.copy()
+            st.rerun()
+
     with m_col2:
-        buy_cnt = len(filtered_df[filtered_df["Signal"] == "BUY / ACCUMULATE"])
-        st.metric("🟢 Buy / Accumulate", buy_cnt)
+        if st.button(
+            f"🟢 **BUY / ACCUMULATE**\n\n### {buy_all_cnt}",
+            use_container_width=True,
+            help="Click to filter by BUY / ACCUMULATE"
+        ):
+            st.session_state.filter_signals = ["BUY / ACCUMULATE"]
+            st.rerun()
+
     with m_col3:
-        sell_cnt = len(filtered_df[filtered_df["Signal"] == "SELL / EXIT"])
-        st.metric("🔴 Sell / Exit", sell_cnt)
+        if st.button(
+            f"🔴 **SELL / EXIT**\n\n### {sell_all_cnt}",
+            use_container_width=True,
+            help="Click to filter by SELL / EXIT"
+        ):
+            st.session_state.filter_signals = ["SELL / EXIT"]
+            st.rerun()
+
     with m_col4:
-        trim_cnt = len(filtered_df[filtered_df["Signal"] == "TRIM / TAKE PROFIT"])
-        st.metric("🟡 Trim / Profit", trim_cnt)
+        if st.button(
+            f"🟡 **TRIM / PROFIT**\n\n### {trim_all_cnt}",
+            use_container_width=True,
+            help="Click to filter by TRIM / TAKE PROFIT"
+        ):
+            st.session_state.filter_signals = ["TRIM / TAKE PROFIT"]
+            st.rerun()
 
     st.markdown("<div style='margin-top: 14px;'></div>", unsafe_allow_html=True)
 
@@ -422,6 +491,14 @@ def render_dashboard():
     # TAB 1: Filtered Watchlist
     # -------------------------------------------------------------------------
     with tab_data:
+        # Contextual Action Bar with "Clear all filters" button
+        col_tab_info, col_clear = st.columns([7, 3])
+        with col_clear:
+            if has_active_filters:
+                if st.button("✕ Clear all filters", use_container_width=True, type="secondary"):
+                    reset_all_filters()
+                    st.rerun()
+
         if filtered_df.empty:
             st.info("No TSX assets match your selected filter criteria.")
         else:
