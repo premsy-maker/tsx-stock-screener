@@ -88,11 +88,25 @@ st.markdown(
         background-color: {bg_sidebar} !important;
         border-right: 1px solid {border_color} !important;
     }}
-    section[data-testid="stSidebar"] * {{
+    section[data-testid="stSidebar"] h1, 
+    section[data-testid="stSidebar"] h2, 
+    section[data-testid="stSidebar"] h3, 
+    section[data-testid="stSidebar"] label,
+    section[data-testid="stSidebar"] p {{
         color: {text_main} !important;
     }}
     section[data-testid="stSidebar"] .stCaption {{
         color: {text_muted} !important;
+    }}
+
+    /* Fix: Multiselect Tag Contrast in Light and Dark Modes */
+    span[data-baseweb="tag"] {{
+        background-color: #0284c7 !important;
+        color: #ffffff !important;
+        border-radius: 4px !important;
+    }}
+    span[data-baseweb="tag"] * {{
+        color: #ffffff !important;
     }}
 
     .block-container {{
@@ -100,13 +114,13 @@ st.markdown(
         padding-bottom: 3rem !important;
     }}
 
-    /* 5. Metrics & Session Clocks (Refined Smaller Font & Balanced Heights) */
+    /* 5. Metrics & Session Clocks (Equalized 1:1:1 Columns with Controlled Typography) */
     div[data-testid="stMetric"] {{
         background-color: {bg_card} !important;
         border: 1px solid {border_color} !important;
         border-radius: 10px !important;
         padding: 10px 14px !important;
-        min-height: 86px !important;
+        min-height: 84px !important;
         display: flex !important;
         flex-direction: column !important;
         justify-content: center !important;
@@ -114,15 +128,25 @@ st.markdown(
     div[data-testid="stMetricLabel"] * {{
         color: {text_muted} !important;
         font-weight: 600 !important;
-        font-size: 0.80rem !important;
+        font-size: 0.78rem !important;
         text-transform: uppercase !important;
         letter-spacing: 0.5px !important;
     }}
     div[data-testid="stMetricValue"] * {{
         color: {text_main} !important;
         font-weight: 700 !important;
-        font-size: 1.15rem !important;
-        line-height: 1.25 !important;
+        font-size: 1.05rem !important;
+        line-height: 1.3 !important;
+    }}
+
+    /* Status Alert Banner Match Card Height */
+    div[data-testid="stAlert"] {{
+        min-height: 84px !important;
+        display: flex !important;
+        align-items: center !important;
+        border-radius: 10px !important;
+        border: 1px solid {border_color} !important;
+        margin-bottom: 0 !important;
     }}
 
     /* 6. Sub-Header Metadata Bar */
@@ -514,7 +538,7 @@ def render_dashboard():
         st.caption("ℹ️ **Educational / Non-Financial Advice Disclaimer**")
         st.caption("TrendNorth is an algorithmic research platform for TSX securities. All indicators and alerts are mathematical representations for self-directed screening and do not constitute financial advice.")
 
-    # 2. Main Title & Session Clock Header
+    # 2. Main Title & Session Clock Header (Equal 1:1:1 Balanced Widths)
     status_state, status_detail, elapsed_time, time_to_close = get_tsx_market_status()
     scan_date_str = scan_time.strftime("%b %d, %Y — %I:%M %p ET") if scan_time else "Data Pending"
     today_et_str = datetime.now(ET_ZONE).strftime("%A, %B %d, %Y")
@@ -532,14 +556,15 @@ def render_dashboard():
         unsafe_allow_html=True,
     )
 
-    col_stat1, col_stat2, col_stat3 = st.columns([1.6, 1.2, 1.2])
+    # Balanced 1:1:1 Equal Width Columns
+    col_stat1, col_stat2, col_stat3 = st.columns(3)
     with col_stat1:
         if status_state == "OPEN":
-            st.success(f"🟢 **TSX Status:** {status_state} ({status_detail})")
+            st.success(f"🟢 **TSX Status:** {status_state}\n\n{status_detail}")
         elif status_state == "PRE-MARKET":
-            st.warning(f"🟡 **TSX Status:** {status_state} ({status_detail})")
+            st.warning(f"🟡 **TSX Status:** {status_state}\n\n{status_detail}")
         else:
-            st.info(f"⚪ **TSX Status:** {status_state} ({status_detail})")
+            st.info(f"⚪ **TSX Status:** {status_state}\n\n{status_detail}")
     with col_stat2:
         st.metric(label="Counter (Elapsed)", value=elapsed_time)
     with col_stat3:
@@ -574,7 +599,7 @@ def render_dashboard():
             | filtered_df["Company"].str.contains(search_query, case=False, na=False)
         ]
 
-    # Verify if any non-default filters are active
+    # Check if any filters are active
     has_active_filters = (
         set(selected_signals) != set(available_signals)
         or rsi_range != (0.0, 100.0)
@@ -641,7 +666,7 @@ def render_dashboard():
     )
 
     # -------------------------------------------------------------------------
-    # TAB 1: Filtered Watchlist (Native Terminal Table)
+    # TAB 1: Filtered Watchlist (Interactive Sortable Native Dataframe)
     # -------------------------------------------------------------------------
     with tab_data:
         col_tab_info, col_clear = st.columns([7.5, 2.5])
@@ -652,73 +677,43 @@ def render_dashboard():
         if filtered_df.empty:
             st.info("No TSX assets match your selected filter criteria.")
         else:
+            def signal_styler(val):
+                if is_dark:
+                    if "BUY" in str(val):
+                        return "color: #4ade80; background-color: rgba(34, 197, 94, 0.20); font-weight: 700; border-radius: 4px;"
+                    elif "SELL" in str(val):
+                        return "color: #f87171; background-color: rgba(239, 68, 68, 0.20); font-weight: 700; border-radius: 4px;"
+                    elif "TRIM" in str(val):
+                        return "color: #fbbf24; background-color: rgba(245, 158, 11, 0.20); font-weight: 700; border-radius: 4px;"
+                    return "color: #94a3b8;"
+                else:
+                    if "BUY" in str(val):
+                        return "color: #15803d; background-color: #f0fdf4; font-weight: 700; border-radius: 4px;"
+                    elif "SELL" in str(val):
+                        return "color: #b91c1c; background-color: #fef2f2; font-weight: 700; border-radius: 4px;"
+                    elif "TRIM" in str(val):
+                        return "color: #b45309; background-color: #fffbeb; font-weight: 700; border-radius: 4px;"
+                    return "color: #475569;"
+
             columns_order = [
                 "Symbol", "Company", "Price", "Signal", "RSI_14", "SMA_50", "SMA_200", "Rationale"
             ]
             display_cols = [c for c in columns_order if c in filtered_df.columns]
-            table_df = filtered_df[display_cols].copy()
 
-            def get_signal_badge(sig):
-                sig_str = str(sig).strip()
-                if "BUY" in sig_str:
-                    bg = "rgba(34, 197, 94, 0.18)" if is_dark else "#dcfce7"
-                    fg = "#4ade80" if is_dark else "#15803d"
-                elif "SELL" in sig_str:
-                    bg = "rgba(239, 68, 68, 0.18)" if is_dark else "#fee2e2"
-                    fg = "#f87171" if is_dark else "#b91c1c"
-                elif "TRIM" in sig_str:
-                    bg = "rgba(245, 158, 11, 0.18)" if is_dark else "#fef3c7"
-                    fg = "#fbbf24" if is_dark else "#b45309"
-                else:
-                    bg = "rgba(148, 163, 184, 0.12)" if is_dark else "#f1f5f9"
-                    fg = "#94a3b8" if is_dark else "#475569"
-                return f'<span style="background:{bg}; color:{fg}; font-weight:700; padding:3px 8px; border-radius:4px; font-size:0.82rem;">{sig_str}</span>'
-
-            rows_parts = []
-            for idx, r in table_df.iterrows():
-                row_bg_color = bg_card if (idx % 2 == 0) else (bg_main if is_dark else "#f8fafc")
-                price_val = f"${r['Price']:.2f}" if pd.notna(r.get("Price")) else "—"
-                sma50_val = f"${r['SMA_50']:.2f}" if pd.notna(r.get("SMA_50")) else "—"
-                sma200_val = f"${r['SMA_200']:.2f}" if pd.notna(r.get("SMA_200")) else "—"
-                rsi_val = f"{r['RSI_14']:.1f}" if pd.notna(r.get("RSI_14")) else "—"
-                badge = get_signal_badge(r.get("Signal", "—"))
-
-                rows_parts.append(
-                    f'<tr style="background-color: {row_bg_color}; border-bottom: 1px solid {border_color};">'
-                    f'<td style="padding: 10px 14px; font-weight: 700; color: {text_main};">{r.get("Symbol", "—")}</td>'
-                    f'<td style="padding: 10px 14px; color: {text_main};">{r.get("Company", "—")}</td>'
-                    f'<td style="padding: 10px 14px; color: {text_main}; text-align: right; font-variant-numeric: tabular-nums;">{price_val}</td>'
-                    f'<td style="padding: 10px 14px; text-align: center;">{badge}</td>'
-                    f'<td style="padding: 10px 14px; color: {text_muted}; text-align: right; font-variant-numeric: tabular-nums;">{rsi_val}</td>'
-                    f'<td style="padding: 10px 14px; color: {text_main}; text-align: right; font-variant-numeric: tabular-nums;">{sma50_val}</td>'
-                    f'<td style="padding: 10px 14px; color: {text_main}; text-align: right; font-variant-numeric: tabular-nums;">{sma200_val}</td>'
-                    f'<td style="padding: 10px 14px; color: {text_muted}; font-size: 0.86rem;">{r.get("Rationale", "—")}</td>'
-                    f'</tr>'
-                )
-
-            all_rows = "".join(rows_parts)
-            table_html = (
-                f'<div style="width: 100%; overflow-x: auto; border: 1px solid {border_color}; border-radius: 8px; margin-top: 8px; margin-bottom: 16px;">'
-                f'<table style="width: 100%; border-collapse: collapse; font-size: 0.90rem; text-align: left; font-family: inherit;">'
-                f'<thead><tr style="background-color: {"#080e1a" if is_dark else "#f1f5f9"}; border-bottom: 1px solid {border_color};">'
-                f'<th style="padding: 11px 14px; color: {text_muted}; font-weight: 600; text-transform: uppercase; font-size: 0.78rem;">Symbol</th>'
-                f'<th style="padding: 11px 14px; color: {text_muted}; font-weight: 600; text-transform: uppercase; font-size: 0.78rem;">Company</th>'
-                f'<th style="padding: 11px 14px; color: {text_muted}; font-weight: 600; text-transform: uppercase; font-size: 0.78rem; text-align: right;">Price</th>'
-                f'<th style="padding: 11px 14px; color: {text_muted}; font-weight: 600; text-transform: uppercase; font-size: 0.78rem; text-align: center;">Signal</th>'
-                f'<th style="padding: 11px 14px; color: {text_muted}; font-weight: 600; text-transform: uppercase; font-size: 0.78rem; text-align: right;">RSI_14</th>'
-                f'<th style="padding: 11px 14px; color: {text_muted}; font-weight: 600; text-transform: uppercase; font-size: 0.78rem; text-align: right;">SMA_50</th>'
-                f'<th style="padding: 11px 14px; color: {text_muted}; font-weight: 600; text-transform: uppercase; font-size: 0.78rem; text-align: right;">SMA_200</th>'
-                f'<th style="padding: 11px 14px; color: {text_muted}; font-weight: 600; text-transform: uppercase; font-size: 0.78rem;">Rationale</th>'
-                f'</tr></thead>'
-                f'<tbody>{all_rows}</tbody>'
-                f'</table></div>'
+            # Native Styler preserved with sorting & column controls
+            styled_df = (
+                filtered_df[display_cols]
+                .style.format({
+                    "Price": "${:.2f}",
+                    "SMA_50": "${:.2f}",
+                    "SMA_200": "${:.2f}",
+                    "RSI_14": "{:.1f}",
+                })
+                .map(signal_styler, subset=["Signal"])
             )
 
-            # Use st.html to reliably render pure HTML without markdown parsing issues
-            if hasattr(st, "html"):
-                st.html(table_html)
-            else:
-                st.markdown(table_html, unsafe_allow_html=True)
+            # Native interactive Streamlit dataframe with full Asc/Desc column sorting
+            st.dataframe(styled_df, use_container_width=True, hide_index=True)
 
             st.download_button(
                 label="📥 Export Filtered Watchlist (CSV)",
@@ -871,15 +866,8 @@ def render_dashboard():
                 "Market Value", "Unrealized P&L ($)", "Return (%)", "Target Price", "Status", "Live Signal"
             ]]
 
-            port_row_bg = "#111827" if is_dark else "#ffffff"
-            port_text_color = "#f9fafb" if is_dark else "#111827"
-
             event = st.dataframe(
-                display_port.style.set_properties(**{
-                    "background-color": port_row_bg,
-                    "color": port_text_color,
-                    "border-color": border_color,
-                }).format({
+                display_port.style.format({
                     "Buy Price": "${:.2f}",
                     "Current Price": "${:.2f}",
                     "Market Value": "${:,.2f}",
