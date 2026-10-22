@@ -40,7 +40,7 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# Custom UI Styling (Fintech Terminal Look)
+# Custom UI Styling (Fintech Card Buttons & Snug Spacing)
 st.markdown(
     """
     <style>
@@ -50,45 +50,25 @@ st.markdown(
         padding-bottom: 3rem !important;
     }
 
-    /* Metric Cards */
-    div[data-testid="stMetric"] {
-        background: #ffffff;
-        border: 1px solid #e2e8f0;
-        padding: 10px 14px;
-        border-radius: 10px 10px 0 0;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.02);
-    }
-    div[data-testid="stMetricLabel"] > div {
-        font-size: 0.80rem !important;
-        font-weight: 700 !important;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-        color: #475569 !important;
-    }
-    div[data-testid="stMetricValue"] > div {
-        font-size: 1.55rem !important;
-        font-weight: 800 !important;
-        color: #0f172a !important;
-    }
-
-    /* Quick Filter Action Buttons Under Metrics */
-    div.kpi-filter-btn button {
-        border-top: none !important;
-        border-top-left-radius: 0 !important;
-        border-top-right-radius: 0 !important;
-        border-bottom-left-radius: 10px !important;
-        border-bottom-right-radius: 10px !important;
-        background-color: #f8fafc !important;
-        font-size: 0.80rem !important;
-        font-weight: 600 !important;
-        color: #2563eb !important;
+    /* Embedded KPI Metric Card Buttons */
+    div.kpi-card-container button {
+        width: 100% !important;
+        background-color: #ffffff !important;
         border: 1px solid #e2e8f0 !important;
-        height: 2.2rem !important;
+        border-radius: 10px !important;
+        padding: 14px 18px !important;
+        text-align: left !important;
+        white-space: pre-line !important;
+        line-height: 1.35 !important;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.02) !important;
+        transition: all 0.15s ease-in-out !important;
+        min-height: 82px !important;
     }
-    div.kpi-filter-btn button:hover {
-        background-color: #eff6ff !important;
-        border-color: #93c5fd !important;
-        color: #1d4ed8 !important;
+    div.kpi-card-container button:hover {
+        border-color: #94a3b8 !important;
+        background-color: #f8fafc !important;
+        transform: translateY(-1px);
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05) !important;
     }
 
     /* Floating Feedback Popover */
@@ -182,14 +162,14 @@ if "filter_search" not in st.session_state:
     st.session_state.filter_search = ""
 
 def set_signal_filter(signal_name):
-    """Callback triggered before rerun to set single signal filter cleanly."""
+    """Callback to set single signal filter before widget tree evaluation."""
     if signal_name == "ALL":
         st.session_state.filter_signals = ALL_SIGNAL_TYPES.copy()
     else:
         st.session_state.filter_signals = [signal_name]
 
 def reset_all_filters():
-    """Callback to reset all interactive filters cleanly."""
+    """Callback to restore all filters back to default values."""
     st.session_state.filter_signals = DEFAULT_ACTIVE_SIGNALS.copy()
     st.session_state.filter_rsi = (0.0, 100.0)
     st.session_state.filter_sma = "All Trends"
@@ -472,31 +452,55 @@ def render_dashboard():
         or bool(search_query)
     )
 
-    # 3. Interactive KPI Blocks (st.metric + On-Click Callback Buttons)
+    # 3. Interactive Embedded Metric Cards (Single Clickable Tile per Card)
     m_col1, m_col2, m_col3, m_col4 = st.columns(4)
 
     with m_col1:
-        st.metric("Watchlist Displayed", f"{len(filtered_df)} / {len(df_raw)}")
-        st.markdown('<div class="kpi-filter-btn">', unsafe_allow_html=True)
-        st.button("🔍 Show All (59)", on_click=set_signal_filter, args=("ALL",), use_container_width=True, key="btn_kpi_all")
+        st.markdown('<div class="kpi-card-container">', unsafe_allow_html=True)
+        st.button(
+            f"WATCHLIST DISPLAYED\n{len(filtered_df)} / {len(df_raw)}",
+            on_click=set_signal_filter,
+            args=("ALL",),
+            use_container_width=True,
+            key="kpi_tile_all",
+            help="Click to display all stocks in the universe"
+        )
         st.markdown('</div>', unsafe_allow_html=True)
 
     with m_col2:
-        st.metric("🟢 Buy / Accumulate", buy_all_cnt)
-        st.markdown('<div class="kpi-filter-btn">', unsafe_allow_html=True)
-        st.button("Filter: Buy Only", on_click=set_signal_filter, args=("BUY / ACCUMULATE",), use_container_width=True, key="btn_kpi_buy")
+        st.markdown('<div class="kpi-card-container">', unsafe_allow_html=True)
+        st.button(
+            f"🟢 BUY / ACCUMULATE\n{buy_all_cnt}",
+            on_click=set_signal_filter,
+            args=("BUY / ACCUMULATE",),
+            use_container_width=True,
+            key="kpi_tile_buy",
+            help="Click to filter by BUY / ACCUMULATE setups"
+        )
         st.markdown('</div>', unsafe_allow_html=True)
 
     with m_col3:
-        st.metric("🔴 Sell / Exit", sell_all_cnt)
-        st.markdown('<div class="kpi-filter-btn">', unsafe_allow_html=True)
-        st.button("Filter: Sell Only", on_click=set_signal_filter, args=("SELL / EXIT",), use_container_width=True, key="btn_kpi_sell")
+        st.markdown('<div class="kpi-card-container">', unsafe_allow_html=True)
+        st.button(
+            f"🔴 SELL / EXIT\n{sell_all_cnt}",
+            on_click=set_signal_filter,
+            args=("SELL / EXIT",),
+            use_container_width=True,
+            key="kpi_tile_sell",
+            help="Click to filter by SELL / EXIT signals"
+        )
         st.markdown('</div>', unsafe_allow_html=True)
 
     with m_col4:
-        st.metric("🟡 Trim / Profit", trim_all_cnt)
-        st.markdown('<div class="kpi-filter-btn">', unsafe_allow_html=True)
-        st.button("Filter: Trim Only", on_click=set_signal_filter, args=("TRIM / TAKE PROFIT",), use_container_width=True, key="btn_kpi_trim")
+        st.markdown('<div class="kpi-card-container">', unsafe_allow_html=True)
+        st.button(
+            f"🟡 TRIM / PROFIT\n{trim_all_cnt}",
+            on_click=set_signal_filter,
+            args=("TRIM / TAKE PROFIT",),
+            use_container_width=True,
+            key="kpi_tile_trim",
+            help="Click to filter by TRIM / TAKE PROFIT signals"
+        )
         st.markdown('</div>', unsafe_allow_html=True)
 
     st.markdown("<div style='margin-top: 14px;'></div>", unsafe_allow_html=True)
