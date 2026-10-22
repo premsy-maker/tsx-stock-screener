@@ -1,7 +1,10 @@
 [theme]
-base = "light"
-primaryColor = "#0B3954"              # Deep navy accent
-backgroundColor = "#F8FAFC"           # Soft slate white
-secondaryBackgroundColor = "#EDF2F7" # Sidebar and cards background
-textColor = "#1E293B"                 # Dark charcoal text
+base = "dark"
+primaryColor = "#38bdf8"
+backgroundColor = "#0b1120"
+secondaryBackgroundColor = "#131d33"
+textColor = "#f8fafc"
 font = "sans serif"
+
+[client]
+toolbarMode = "minimal"
