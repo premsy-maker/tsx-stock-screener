@@ -100,20 +100,29 @@ st.markdown(
         padding-bottom: 3rem !important;
     }}
 
-    /* 5. Metrics & Session Clocks */
+    /* 5. Metrics & Session Clocks (Refined Smaller Font & Balanced Heights) */
     div[data-testid="stMetric"] {{
         background-color: {bg_card} !important;
         border: 1px solid {border_color} !important;
         border-radius: 10px !important;
         padding: 10px 14px !important;
+        min-height: 86px !important;
+        display: flex !important;
+        flex-direction: column !important;
+        justify-content: center !important;
     }}
     div[data-testid="stMetricLabel"] * {{
         color: {text_muted} !important;
         font-weight: 600 !important;
+        font-size: 0.80rem !important;
+        text-transform: uppercase !important;
+        letter-spacing: 0.5px !important;
     }}
     div[data-testid="stMetricValue"] * {{
         color: {text_main} !important;
-        font-weight: 800 !important;
+        font-weight: 700 !important;
+        font-size: 1.15rem !important;
+        line-height: 1.25 !important;
     }}
 
     /* 6. Sub-Header Metadata Bar */
@@ -163,7 +172,28 @@ st.markdown(
         color: {text_main} !important;
     }}
 
-    /* 9. Floating Feedback Popover */
+    /* 9. Expanders Theme Alignment (Fixes White Expanders in Manual) */
+    div[data-testid="stExpander"] {{
+        background-color: {bg_card} !important;
+        border: 1px solid {border_color} !important;
+        border-radius: 8px !important;
+    }}
+    div[data-testid="stExpander"] summary {{
+        background-color: {bg_card} !important;
+        color: {text_main} !important;
+    }}
+    div[data-testid="stExpander"] summary * {{
+        color: {text_main} !important;
+    }}
+    div[data-testid="stExpander"] div[role="region"] {{
+        background-color: {bg_card} !important;
+        color: {text_main} !important;
+    }}
+    div[data-testid="stExpander"] div[role="region"] * {{
+        color: {text_main} !important;
+    }}
+
+    /* 10. Floating Feedback Popover */
     div[data-testid="stPopover"] {{
         position: fixed;
         bottom: 24px;
@@ -180,7 +210,7 @@ COMPANY_NAMES = {
     "XEQT.TO": "iShares Core Equity ETF Portfolio",
     "XIU.TO": "iShares S&P/TSX 60 Index ETF",
     "RY.TO": "Royal Bank of Canada",
-    "TD.TO": "Toronto-要因Bank",
+    "TD.TO": "Toronto-Dominion Bank",
     "BMO.TO": "Bank of Montreal",
     "BNS.TO": "Bank of Nova Scotia",
     "CM.TO": "Canadian Imperial Bank of Commerce",
@@ -611,7 +641,7 @@ def render_dashboard():
     )
 
     # -------------------------------------------------------------------------
-    # TAB 1: Filtered Watchlist (Theme-Aware Terminal Table)
+    # TAB 1: Filtered Watchlist (Native Terminal Table)
     # -------------------------------------------------------------------------
     with tab_data:
         col_tab_info, col_clear = st.columns([7.5, 2.5])
@@ -644,7 +674,7 @@ def render_dashboard():
                     fg = "#94a3b8" if is_dark else "#475569"
                 return f'<span style="background:{bg}; color:{fg}; font-weight:700; padding:3px 8px; border-radius:4px; font-size:0.82rem;">{sig_str}</span>'
 
-            rows_html = ""
+            rows_parts = []
             for idx, r in table_df.iterrows():
                 row_bg_color = bg_card if (idx % 2 == 0) else (bg_main if is_dark else "#f8fafc")
                 price_val = f"${r['Price']:.2f}" if pd.notna(r.get("Price")) else "—"
@@ -653,41 +683,42 @@ def render_dashboard():
                 rsi_val = f"{r['RSI_14']:.1f}" if pd.notna(r.get("RSI_14")) else "—"
                 badge = get_signal_badge(r.get("Signal", "—"))
 
-                rows_html += f"""
-                <tr style="background-color: {row_bg_color}; border-bottom: 1px solid {border_color};">
-                    <td style="padding: 10px 14px; font-weight: 700; color: {text_main};">{r.get('Symbol', '—')}</td>
-                    <td style="padding: 10px 14px; color: {text_main};">{r.get('Company', '—')}</td>
-                    <td style="padding: 10px 14px; color: {text_main}; text-align: right; font-variant-numeric: tabular-nums;">{price_val}</td>
-                    <td style="padding: 10px 14px; text-align: center;">{badge}</td>
-                    <td style="padding: 10px 14px; color: {text_muted}; text-align: right; font-variant-numeric: tabular-nums;">{rsi_val}</td>
-                    <td style="padding: 10px 14px; color: {text_main}; text-align: right; font-variant-numeric: tabular-nums;">{sma50_val}</td>
-                    <td style="padding: 10px 14px; color: {text_main}; text-align: right; font-variant-numeric: tabular-nums;">{sma200_val}</td>
-                    <td style="padding: 10px 14px; color: {text_muted}; font-size: 0.86rem;">{r.get('Rationale', '—')}</td>
-                </tr>
-                """
+                rows_parts.append(
+                    f'<tr style="background-color: {row_bg_color}; border-bottom: 1px solid {border_color};">'
+                    f'<td style="padding: 10px 14px; font-weight: 700; color: {text_main};">{r.get("Symbol", "—")}</td>'
+                    f'<td style="padding: 10px 14px; color: {text_main};">{r.get("Company", "—")}</td>'
+                    f'<td style="padding: 10px 14px; color: {text_main}; text-align: right; font-variant-numeric: tabular-nums;">{price_val}</td>'
+                    f'<td style="padding: 10px 14px; text-align: center;">{badge}</td>'
+                    f'<td style="padding: 10px 14px; color: {text_muted}; text-align: right; font-variant-numeric: tabular-nums;">{rsi_val}</td>'
+                    f'<td style="padding: 10px 14px; color: {text_main}; text-align: right; font-variant-numeric: tabular-nums;">{sma50_val}</td>'
+                    f'<td style="padding: 10px 14px; color: {text_main}; text-align: right; font-variant-numeric: tabular-nums;">{sma200_val}</td>'
+                    f'<td style="padding: 10px 14px; color: {text_muted}; font-size: 0.86rem;">{r.get("Rationale", "—")}</td>'
+                    f'</tr>'
+                )
 
-            table_html = f"""
-            <div style="width: 100%; overflow-x: auto; border: 1px solid {border_color}; border-radius: 8px; margin-top: 8px; margin-bottom: 16px;">
-                <table style="width: 100%; border-collapse: collapse; font-size: 0.90rem; text-align: left; font-family: inherit;">
-                    <thead>
-                        <tr style="background-color: {'#080e1a' if is_dark else '#f1f5f9'}; border-bottom: 1px solid {border_color};">
-                            <th style="padding: 11px 14px; color: {text_muted}; font-weight: 600; text-transform: uppercase; font-size: 0.78rem;">Symbol</th>
-                            <th style="padding: 11px 14px; color: {text_muted}; font-weight: 600; text-transform: uppercase; font-size: 0.78rem;">Company</th>
-                            <th style="padding: 11px 14px; color: {text_muted}; font-weight: 600; text-transform: uppercase; font-size: 0.78rem; text-align: right;">Price</th>
-                            <th style="padding: 11px 14px; color: {text_muted}; font-weight: 600; text-transform: uppercase; font-size: 0.78rem; text-align: center;">Signal</th>
-                            <th style="padding: 11px 14px; color: {text_muted}; font-weight: 600; text-transform: uppercase; font-size: 0.78rem; text-align: right;">RSI_14</th>
-                            <th style="padding: 11px 14px; color: {text_muted}; font-weight: 600; text-transform: uppercase; font-size: 0.78rem; text-align: right;">SMA_50</th>
-                            <th style="padding: 11px 14px; color: {text_muted}; font-weight: 600; text-transform: uppercase; font-size: 0.78rem; text-align: right;">SMA_200</th>
-                            <th style="padding: 11px 14px; color: {text_muted}; font-weight: 600; text-transform: uppercase; font-size: 0.78rem;">Rationale</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {rows_html}
-                    </tbody>
-                </table>
-            </div>
-            """
-            st.markdown(table_html, unsafe_allow_html=True)
+            all_rows = "".join(rows_parts)
+            table_html = (
+                f'<div style="width: 100%; overflow-x: auto; border: 1px solid {border_color}; border-radius: 8px; margin-top: 8px; margin-bottom: 16px;">'
+                f'<table style="width: 100%; border-collapse: collapse; font-size: 0.90rem; text-align: left; font-family: inherit;">'
+                f'<thead><tr style="background-color: {"#080e1a" if is_dark else "#f1f5f9"}; border-bottom: 1px solid {border_color};">'
+                f'<th style="padding: 11px 14px; color: {text_muted}; font-weight: 600; text-transform: uppercase; font-size: 0.78rem;">Symbol</th>'
+                f'<th style="padding: 11px 14px; color: {text_muted}; font-weight: 600; text-transform: uppercase; font-size: 0.78rem;">Company</th>'
+                f'<th style="padding: 11px 14px; color: {text_muted}; font-weight: 600; text-transform: uppercase; font-size: 0.78rem; text-align: right;">Price</th>'
+                f'<th style="padding: 11px 14px; color: {text_muted}; font-weight: 600; text-transform: uppercase; font-size: 0.78rem; text-align: center;">Signal</th>'
+                f'<th style="padding: 11px 14px; color: {text_muted}; font-weight: 600; text-transform: uppercase; font-size: 0.78rem; text-align: right;">RSI_14</th>'
+                f'<th style="padding: 11px 14px; color: {text_muted}; font-weight: 600; text-transform: uppercase; font-size: 0.78rem; text-align: right;">SMA_50</th>'
+                f'<th style="padding: 11px 14px; color: {text_muted}; font-weight: 600; text-transform: uppercase; font-size: 0.78rem; text-align: right;">SMA_200</th>'
+                f'<th style="padding: 11px 14px; color: {text_muted}; font-weight: 600; text-transform: uppercase; font-size: 0.78rem;">Rationale</th>'
+                f'</tr></thead>'
+                f'<tbody>{all_rows}</tbody>'
+                f'</table></div>'
+            )
+
+            # Use st.html to reliably render pure HTML without markdown parsing issues
+            if hasattr(st, "html"):
+                st.html(table_html)
+            else:
+                st.markdown(table_html, unsafe_allow_html=True)
 
             st.download_button(
                 label="📥 Export Filtered Watchlist (CSV)",
