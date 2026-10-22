@@ -56,6 +56,7 @@ bg_sidebar = "#070c18" if is_dark else "#ffffff"
 border_color = "#243556" if is_dark else "#e2e8f0"
 text_main = "#f8fafc" if is_dark else "#0f172a"
 text_muted = "#94a3b8" if is_dark else "#64748b"
+active_tab_color = "#38bdf8" if is_dark else "#2563eb"
 plotly_theme = "plotly_dark" if is_dark else "plotly_white"
 
 st.markdown(
@@ -99,7 +100,7 @@ st.markdown(
         color: {text_muted} !important;
     }}
 
-    /* Fix: Multiselect Tag Contrast in Light and Dark Modes */
+    /* Multiselect Tag Contrast in Light and Dark Modes */
     span[data-baseweb="tag"] {{
         background-color: #0284c7 !important;
         color: #ffffff !important;
@@ -114,7 +115,7 @@ st.markdown(
         padding-bottom: 3rem !important;
     }}
 
-    /* 5. Metrics & Session Clocks (Equalized 1:1:1 Columns with Controlled Typography) */
+    /* 5. Metrics & Session Clocks */
     div[data-testid="stMetric"] {{
         background-color: {bg_card} !important;
         border: 1px solid {border_color} !important;
@@ -196,7 +197,29 @@ st.markdown(
         color: {text_main} !important;
     }}
 
-    /* 9. Expanders Theme Alignment (Fixes White Expanders in Manual) */
+    /* 9. Tab Styling Fix (Bright & Legible in Dark & Light Modes) */
+    button[data-testid="stTab"] {{
+        background-color: transparent !important;
+        border: none !important;
+        padding: 8px 16px !important;
+    }}
+    button[data-testid="stTab"] p {{
+        color: {text_muted} !important;
+        font-weight: 600 !important;
+        font-size: 0.95rem !important;
+    }}
+    button[data-testid="stTab"][aria-selected="true"] {{
+        border-bottom: 2px solid {active_tab_color} !important;
+    }}
+    button[data-testid="stTab"][aria-selected="true"] p {{
+        color: {active_tab_color} !important;
+        font-weight: 700 !important;
+    }}
+    button[data-testid="stTab"]:hover p {{
+        color: {text_main} !important;
+    }}
+
+    /* 10. Expanders Theme Alignment */
     div[data-testid="stExpander"] {{
         background-color: {bg_card} !important;
         border: 1px solid {border_color} !important;
@@ -217,7 +240,7 @@ st.markdown(
         color: {text_main} !important;
     }}
 
-    /* 10. Floating Feedback Popover */
+    /* 11. Floating Feedback Popover */
     div[data-testid="stPopover"] {{
         position: fixed;
         bottom: 24px;
@@ -538,7 +561,7 @@ def render_dashboard():
         st.caption("ℹ️ **Educational / Non-Financial Advice Disclaimer**")
         st.caption("TrendNorth is an algorithmic research platform for TSX securities. All indicators and alerts are mathematical representations for self-directed screening and do not constitute financial advice.")
 
-    # 2. Main Title & Session Clock Header (Equal 1:1:1 Balanced Widths)
+    # 2. Main Title & Session Clock Header
     status_state, status_detail, elapsed_time, time_to_close = get_tsx_market_status()
     scan_date_str = scan_time.strftime("%b %d, %Y — %I:%M %p ET") if scan_time else "Data Pending"
     today_et_str = datetime.now(ET_ZONE).strftime("%A, %B %d, %Y")
@@ -556,7 +579,7 @@ def render_dashboard():
         unsafe_allow_html=True,
     )
 
-    # Balanced 1:1:1 Equal Width Columns
+    # 3 Equal-Width Columns for TSX Status & Clocks (Dead Box Completely Removed)
     col_stat1, col_stat2, col_stat3 = st.columns(3)
     with col_stat1:
         if status_state == "OPEN":
@@ -599,7 +622,7 @@ def render_dashboard():
             | filtered_df["Company"].str.contains(search_query, case=False, na=False)
         ]
 
-    # Check if any filters are active
+    # Verify if any non-default filters are active
     has_active_filters = (
         set(selected_signals) != set(available_signals)
         or rsi_range != (0.0, 100.0)
@@ -666,7 +689,7 @@ def render_dashboard():
     )
 
     # -------------------------------------------------------------------------
-    # TAB 1: Filtered Watchlist (Interactive Sortable Native Dataframe)
+    # TAB 1: Filtered Watchlist (Interactive Terminal Table with Asc/Desc Sorting)
     # -------------------------------------------------------------------------
     with tab_data:
         col_tab_info, col_clear = st.columns([7.5, 2.5])
@@ -677,43 +700,111 @@ def render_dashboard():
         if filtered_df.empty:
             st.info("No TSX assets match your selected filter criteria.")
         else:
-            def signal_styler(val):
-                if is_dark:
-                    if "BUY" in str(val):
-                        return "color: #4ade80; background-color: rgba(34, 197, 94, 0.20); font-weight: 700; border-radius: 4px;"
-                    elif "SELL" in str(val):
-                        return "color: #f87171; background-color: rgba(239, 68, 68, 0.20); font-weight: 700; border-radius: 4px;"
-                    elif "TRIM" in str(val):
-                        return "color: #fbbf24; background-color: rgba(245, 158, 11, 0.20); font-weight: 700; border-radius: 4px;"
-                    return "color: #94a3b8;"
-                else:
-                    if "BUY" in str(val):
-                        return "color: #15803d; background-color: #f0fdf4; font-weight: 700; border-radius: 4px;"
-                    elif "SELL" in str(val):
-                        return "color: #b91c1c; background-color: #fef2f2; font-weight: 700; border-radius: 4px;"
-                    elif "TRIM" in str(val):
-                        return "color: #b45309; background-color: #fffbeb; font-weight: 700; border-radius: 4px;"
-                    return "color: #475569;"
-
             columns_order = [
                 "Symbol", "Company", "Price", "Signal", "RSI_14", "SMA_50", "SMA_200", "Rationale"
             ]
             display_cols = [c for c in columns_order if c in filtered_df.columns]
+            table_df = filtered_df[display_cols].copy()
 
-            # Native Styler preserved with sorting & column controls
-            styled_df = (
-                filtered_df[display_cols]
-                .style.format({
-                    "Price": "${:.2f}",
-                    "SMA_50": "${:.2f}",
-                    "SMA_200": "${:.2f}",
-                    "RSI_14": "{:.1f}",
-                })
-                .map(signal_styler, subset=["Signal"])
+            def get_signal_badge(sig):
+                sig_str = str(sig).strip()
+                if "BUY" in sig_str:
+                    bg = "rgba(34, 197, 94, 0.18)" if is_dark else "#dcfce7"
+                    fg = "#4ade80" if is_dark else "#15803d"
+                elif "SELL" in sig_str:
+                    bg = "rgba(239, 68, 68, 0.18)" if is_dark else "#fee2e2"
+                    fg = "#f87171" if is_dark else "#b91c1c"
+                elif "TRIM" in sig_str:
+                    bg = "rgba(245, 158, 11, 0.18)" if is_dark else "#fef3c7"
+                    fg = "#fbbf24" if is_dark else "#b45309"
+                else:
+                    bg = "rgba(148, 163, 184, 0.12)" if is_dark else "#f1f5f9"
+                    fg = "#94a3b8" if is_dark else "#475569"
+                return f'<span style="background:{bg}; color:{fg}; font-weight:700; padding:3px 8px; border-radius:4px; font-size:0.82rem;">{sig_str}</span>'
+
+            rows_parts = []
+            for idx, r in table_df.iterrows():
+                row_bg_color = bg_card if (idx % 2 == 0) else (bg_main if is_dark else "#f8fafc")
+                price_num = float(r["Price"]) if pd.notna(r.get("Price")) else 0.0
+                price_val = f"${price_num:.2f}" if pd.notna(r.get("Price")) else "—"
+
+                sma50_num = float(r["SMA_50"]) if pd.notna(r.get("SMA_50")) else 0.0
+                sma50_val = f"${sma50_num:.2f}" if pd.notna(r.get("SMA_50")) else "—"
+
+                sma200_num = float(r["SMA_200"]) if pd.notna(r.get("SMA_200")) else 0.0
+                sma200_val = f"${sma200_num:.2f}" if pd.notna(r.get("SMA_200")) else "—"
+
+                rsi_num = float(r["RSI_14"]) if pd.notna(r.get("RSI_14")) else 0.0
+                rsi_val = f"{rsi_num:.1f}" if pd.notna(r.get("RSI_14")) else "—"
+                badge = get_signal_badge(r.get("Signal", "—"))
+
+                rows_parts.append(
+                    f'<tr style="background-color: {row_bg_color}; border-bottom: 1px solid {border_color};">'
+                    f'<td style="padding: 10px 14px; font-weight: 700; color: {text_main};">{r.get("Symbol", "—")}</td>'
+                    f'<td style="padding: 10px 14px; color: {text_main};">{r.get("Company", "—")}</td>'
+                    f'<td data-val="{price_num}" style="padding: 10px 14px; color: {text_main}; text-align: right; font-variant-numeric: tabular-nums;">{price_val}</td>'
+                    f'<td style="padding: 10px 14px; text-align: center;">{badge}</td>'
+                    f'<td data-val="{rsi_num}" style="padding: 10px 14px; color: {text_muted}; text-align: right; font-variant-numeric: tabular-nums;">{rsi_val}</td>'
+                    f'<td data-val="{sma50_num}" style="padding: 10px 14px; color: {text_main}; text-align: right; font-variant-numeric: tabular-nums;">{sma50_val}</td>'
+                    f'<td data-val="{sma200_num}" style="padding: 10px 14px; color: {text_main}; text-align: right; font-variant-numeric: tabular-nums;">{sma200_val}</td>'
+                    f'<td style="padding: 10px 14px; color: {text_muted}; font-size: 0.86rem;">{r.get("Rationale", "—")}</td>'
+                    f'</tr>'
+                )
+
+            all_rows = "".join(rows_parts)
+            table_id = "tn_screener_table"
+            table_html = (
+                f'<div style="width: 100%; overflow-x: auto; border: 1px solid {border_color}; border-radius: 8px; margin-top: 8px; margin-bottom: 16px;">'
+                f'<table id="{table_id}" style="width: 100%; border-collapse: collapse; font-size: 0.90rem; text-align: left; font-family: inherit;">'
+                f'<thead><tr style="background-color: {"#080e1a" if is_dark else "#f1f5f9"}; border-bottom: 1px solid {border_color};">'
+                f'<th onclick="sortTnTable(0, false)" style="padding: 11px 14px; color: {text_muted}; font-weight: 600; text-transform: uppercase; font-size: 0.78rem; cursor: pointer; user-select: none;">Symbol ⇅</th>'
+                f'<th onclick="sortTnTable(1, false)" style="padding: 11px 14px; color: {text_muted}; font-weight: 600; text-transform: uppercase; font-size: 0.78rem; cursor: pointer; user-select: none;">Company ⇅</th>'
+                f'<th onclick="sortTnTable(2, true)" style="padding: 11px 14px; color: {text_muted}; font-weight: 600; text-transform: uppercase; font-size: 0.78rem; text-align: right; cursor: pointer; user-select: none;">Price ⇅</th>'
+                f'<th onclick="sortTnTable(3, false)" style="padding: 11px 14px; color: {text_muted}; font-weight: 600; text-transform: uppercase; font-size: 0.78rem; text-align: center; cursor: pointer; user-select: none;">Signal ⇅</th>'
+                f'<th onclick="sortTnTable(4, true)" style="padding: 11px 14px; color: {text_muted}; font-weight: 600; text-transform: uppercase; font-size: 0.78rem; text-align: right; cursor: pointer; user-select: none;">RSI_14 ⇅</th>'
+                f'<th onclick="sortTnTable(5, true)" style="padding: 11px 14px; color: {text_muted}; font-weight: 600; text-transform: uppercase; font-size: 0.78rem; text-align: right; cursor: pointer; user-select: none;">SMA_50 ⇅</th>'
+                f'<th onclick="sortTnTable(6, true)" style="padding: 11px 14px; color: {text_muted}; font-weight: 600; text-transform: uppercase; font-size: 0.78rem; text-align: right; cursor: pointer; user-select: none;">SMA_200 ⇅</th>'
+                f'<th onclick="sortTnTable(7, false)" style="padding: 11px 14px; color: {text_muted}; font-weight: 600; text-transform: uppercase; font-size: 0.78rem; cursor: pointer; user-select: none;">Rationale ⇅</th>'
+                f'</tr></thead>'
+                f'<tbody>{all_rows}</tbody>'
+                f'</table></div>'
+                f"""
+                <script>
+                var sortDirection = {{}};
+                function sortTnTable(colIndex, isNumeric) {{
+                    var table = document.getElementById("{table_id}");
+                    if (!table) return;
+                    var tbody = table.querySelector("tbody");
+                    var rows = Array.from(tbody.querySelectorAll("tr"));
+                    var asc = !sortDirection[colIndex];
+                    sortDirection = {{}};
+                    sortDirection[colIndex] = asc;
+
+                    rows.sort(function(rowA, rowB) {{
+                        var cellA = rowA.children[colIndex];
+                        var cellB = rowB.children[colIndex];
+                        if (isNumeric) {{
+                            var valA = parseFloat(cellA.getAttribute("data-val") || 0);
+                            var valB = parseFloat(cellB.getAttribute("data-val") || 0);
+                            return asc ? valA - valB : valB - valA;
+                        }} else {{
+                            var valA = cellA.innerText.trim().toLowerCase();
+                            var valB = cellB.innerText.trim().toLowerCase();
+                            if (valA < valB) return asc ? -1 : 1;
+                            if (valA > valB) return asc ? 1 : -1;
+                            return 0;
+                        }}
+                    }});
+                    rows.forEach(function(row) {{ tbody.appendChild(row); }});
+                }}
+                </script>
+                """
             )
 
-            # Native interactive Streamlit dataframe with full Asc/Desc column sorting
-            st.dataframe(styled_df, use_container_width=True, hide_index=True)
+            if hasattr(st, "html"):
+                st.html(table_html)
+            else:
+                st.markdown(table_html, unsafe_allow_html=True)
 
             st.download_button(
                 label="📥 Export Filtered Watchlist (CSV)",
@@ -866,8 +957,15 @@ def render_dashboard():
                 "Market Value", "Unrealized P&L ($)", "Return (%)", "Target Price", "Status", "Live Signal"
             ]]
 
+            port_row_bg = "#111827" if is_dark else "#ffffff"
+            port_text_color = "#f9fafb" if is_dark else "#111827"
+
             event = st.dataframe(
-                display_port.style.format({
+                display_port.style.set_properties(**{
+                    "background-color": port_row_bg,
+                    "color": port_text_color,
+                    "border-color": border_color,
+                }).format({
                     "Buy Price": "${:.2f}",
                     "Current Price": "${:.2f}",
                     "Market Value": "${:,.2f}",
