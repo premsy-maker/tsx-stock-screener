@@ -1,7 +1,22 @@
+import os
+from datetime import datetime, timezone
 import yfinance as yf
 import pandas as pd
 from tabulate import tabulate
 from notifierV1 import send_stock_email
+
+# Load .env file automatically when executing locally
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
+
+# Supabase Client Import
+try:
+    from supabase import create_client, Client
+except ImportError:
+    create_client = None
 
 WATCHLIST = {
     # --- Index / All-in-One ETFs ---
@@ -82,7 +97,6 @@ WATCHLIST = {
     "K.TO": "Kinross Gold",
 }
 
-# The RSI (Relative Strength Index) measures: Over the last 14 days, were the upward price moves stronger than downward price moves?
 def calculate_rsi(series: pd.Series, period: int = 14) -> pd.Series:
     delta = series.diff()
     gain = (delta.where(delta > 0, 0.0)).rolling(window=period).mean()
@@ -106,7 +120,10 @@ def analyze_symbol(symbol: str, company_name: str):
     current_50 = float(sma_50.iloc[-1])
     current_200 = float(sma_200.iloc[-1])
 
-    # Evaluate state
+    # Determine SMA trend
+    sma_trend = "Bullish (50 > 200)" if current_50 >= current_200 else "Bearish (50 < 200)"
+
+    # Evaluate signal state
     if current_50 > current_200 and current_rsi <= 40:
         signal = "BUY / ACCUMULATE"
         summary = "Bullish trend + Pullback dip"
@@ -127,9 +144,59 @@ def analyze_symbol(symbol: str, company_name: str):
         "RSI_14": round(current_rsi, 1),
         "SMA_50": round(current_50, 2),
         "SMA_200": round(current_200, 2),
+        "SMA_Trend": sma_trend,
         "Signal": signal,
         "Rationale": summary
     }
+
+def push_to_supabase(df: pd.DataFrame):
+    url = os.environ.get("SUPABASE_URL")
+    # Prefer secret service key for writes, fallback to key if configured
+    key = os.environ.get("SUPABASE_SERVICE_KEY") or os.environ.get("SUPABASE_KEY")
+
+    if not url or not key:
+        print("⚠️ Supabase credentials not found in environment. Skipping DB upload.")
+        return
+
+    if create_client is None:
+        print("⚠️ Supabase library not installed. Run 'pip install supabase'. Skipping DB upload.")
+        return
+
+    try:
+        supabase: Client = create_client(url, key)
+
+        db_df = df.copy()
+        rename_map = {
+            "Symbol": "symbol",
+            "Company": "company",
+            "Price": "price",
+            "Signal": "signal",
+            "RSI_14": "rsi_14",
+            "SMA_50": "sma_50",
+            "SMA_200": "sma_200",
+            "SMA_Trend": "sma_trend",
+            "Rationale": "rationale"
+        }
+        db_df.rename(columns=rename_map, inplace=True)
+
+        # Stamp all rows with an identical UTC scan timestamp
+        scan_time = datetime.now(timezone.utc).isoformat()
+        db_df["scan_timestamp"] = scan_time
+
+        cols_to_keep = [
+            "scan_timestamp", "symbol", "company", "price",
+            "signal", "rsi_14", "sma_50", "sma_200", "sma_trend", "rationale"
+        ]
+        valid_cols = [c for c in cols_to_keep if c in db_df.columns]
+        
+        # Replace NaN / NaT with None so JSON serialization succeeds
+        cleaned_df = db_df[valid_cols].where(pd.notnull(db_df[valid_cols]), None)
+        records = cleaned_df.to_dict(orient="records")
+
+        supabase.table("screener_results").insert(records).execute()
+        print(f"✅ Successfully inserted {len(records)} records into Supabase table 'screener_results'.")
+    except Exception as e:
+        print(f"❌ Error inserting records to Supabase: {e}")
 
 def main():
     print("Fetching TSX market data and computing signals...\n")
@@ -144,10 +211,16 @@ def main():
             if row["Signal"] != "KEEP / HOLD":
                 actionable.append(row)
 
-    # 1. Print full terminal grid and persist results to CSV
+    # 1. Print full terminal grid, save CSV, and push to Supabase
     if results:
         results_df = pd.DataFrame(results)
+        
+        # Keep CSV write intact as a reliable local fallback
         results_df.to_csv("screener_results.csv", index=False)
+        
+        # Push to Supabase Cloud Database
+        push_to_supabase(results_df)
+
         print(tabulate(results, headers="keys", tablefmt="fancy_grid"))
     else:
         print("No data retrieved. Verify your internet connection or symbols.")

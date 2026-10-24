@@ -6,3 +6,4 @@ tabulate
 requests
 python-dotenv
 streamlit-local-storage
+supabase>=2.0.0

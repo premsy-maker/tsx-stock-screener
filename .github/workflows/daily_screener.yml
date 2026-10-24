@@ -5,9 +5,9 @@ permissions:
 
 on:
   schedule:
-    # 10:32 AM EDT (Mon-Fri) -> 14:32 UTC
+    # 10:32 AM EDT (Mon-Fri) -> 14:32 UTC (Backup fallback)
     - cron: '32 14 * * 1-5'
-    # 4:47 PM EDT (Mon-Fri) -> 20:47 UTC (45 mins after market close)
+    # 4:47 PM EDT (Mon-Fri) -> 20:47 UTC (Backup fallback)
     - cron: '47 20 * * 1-5'
   workflow_dispatch:
 
@@ -35,6 +35,8 @@ jobs:
           GMAIL_USER: ${{ secrets.GMAIL_USER }}
           GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
           RECIPIENT_EMAIL: ${{ secrets.RECIPIENT_EMAIL }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
         run: |
           python ScreenStocksV1.py
 
@@ -42,17 +44,11 @@ jobs:
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          
-          # Switch to an isolated branch dedicated solely to screener data
           git checkout -B data
-          
-          # Force-add the CSV output
           git add -f screener_results.csv
-          
           if git diff --staged --quiet; then
             echo "No CSV changes detected."
           else
             git commit -m "data(auto): daily scan results [skip ci]"
-            # Push only to the remote 'data' branch, leaving 'main' untouched
             git push -f origin data
           fi

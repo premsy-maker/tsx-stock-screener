@@ -10,6 +10,12 @@ import plotly.express as px
 import requests
 import streamlit as st
 
+# Supabase Client Import
+try:
+    from supabase import create_client, Client
+except ImportError:
+    create_client = None
+
 # Import feedback sender from notifier
 try:
     from notifierV1 import send_feedback_email
@@ -380,7 +386,7 @@ def get_tsx_market_status():
         return "CLOSED", "Market Closed (Post-Session)", "Session Ended", "Opens 9:30 AM ET next trading day"
 
 # -----------------------------------------------------------------------------
-# Resilient Data Loader with Cache-Busting & Diagnostics
+# Resilient Data Loader with Supabase Primary & Cloud Fallback
 # -----------------------------------------------------------------------------
 @st.cache_data(ttl=60)
 def load_screener_results():
@@ -388,33 +394,86 @@ def load_screener_results():
     mod_time = None
     fetch_error = None
 
-    bust_url = f"{DATA_BRANCH_URL}?t={int(time.time())}"
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) TrendNorth/1.0",
-        "Cache-Control": "no-cache",
-        "Pragma": "no-cache",
-    }
+    # 1. Primary: Attempt fetch from Supabase Cloud Database
+    supabase_url = st.secrets.get("SUPABASE_URL") or os.environ.get("SUPABASE_URL")
+    supabase_key = st.secrets.get("SUPABASE_KEY") or os.environ.get("SUPABASE_KEY")
 
-    if "GITHUB_TOKEN" in st.secrets:
-        headers["Authorization"] = f"token {st.secrets['GITHUB_TOKEN']}"
+    if supabase_url and supabase_key and create_client is not None:
+        try:
+            supabase: Client = create_client(supabase_url, supabase_key)
+            
+            # Query the latest scan timestamp
+            latest_run = (
+                supabase.table("screener_results")
+                .select("scan_timestamp")
+                .order("scan_timestamp", desc=True)
+                .limit(1)
+                .execute()
+            )
 
-    try:
-        resp = requests.get(bust_url, headers=headers, timeout=10)
-        if resp.status_code == 200:
-            df = pd.read_csv(io.StringIO(resp.text))
-            mod_time = datetime.now(ET_ZONE)
-        else:
-            fetch_error = f"HTTP {resp.status_code} - {resp.reason}"
-    except Exception as e:
-        fetch_error = str(e)
+            if latest_run.data:
+                latest_ts_str = latest_run.data[0]["scan_timestamp"]
+                
+                # Fetch all records belonging to this scan
+                res = (
+                    supabase.table("screener_results")
+                    .select("symbol, company, price, signal, rsi_14, sma_50, sma_200, sma_trend, rationale, scan_timestamp")
+                    .eq("scan_timestamp", latest_ts_str)
+                    .execute()
+                )
 
-    if df is None and os.path.exists(LOCAL_CSV_FILE):
+                if res.data:
+                    df = pd.DataFrame(res.data)
+                    # Align column naming with the frontend
+                    df.rename(columns={
+                        "symbol": "Symbol",
+                        "company": "Company",
+                        "price": "Price",
+                        "signal": "Signal",
+                        "rsi_14": "RSI_14",
+                        "sma_50": "SMA_50",
+                        "sma_200": "SMA_200",
+                        "sma_trend": "SMA_Trend",
+                        "rationale": "Rationale",
+                    }, inplace=True)
+
+                    try:
+                        # Parse ISO timestamp to Eastern Time
+                        parsed_dt = datetime.fromisoformat(latest_ts_str.replace("Z", "+00:00"))
+                        mod_time = parsed_dt.astimezone(ET_ZONE)
+                    except Exception:
+                        mod_time = datetime.now(ET_ZONE)
+        except Exception as e:
+            fetch_error = f"Supabase: {e}"
+
+    # 2. Secondary: Fallback to GitHub Data Branch if Supabase returned no rows
+    if df is None or df.empty:
+        bust_url = f"{DATA_BRANCH_URL}?t={int(time.time())}"
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) TrendNorth/1.0",
+            "Cache-Control": "no-cache",
+            "Pragma": "no-cache",
+        }
+
+        if "GITHUB_TOKEN" in st.secrets:
+            headers["Authorization"] = f"token {st.secrets['GITHUB_TOKEN']}"
+
+        try:
+            resp = requests.get(bust_url, headers=headers, timeout=10)
+            if resp.status_code == 200:
+                df = pd.read_csv(io.StringIO(resp.text))
+                mod_time = datetime.now(ET_ZONE)
+            else:
+                fetch_error = f"HTTP {resp.status_code}: {resp.reason}"
+        except Exception as e:
+            fetch_error = f"Remote URL: {e}"
+
+    # 3. Tertiary: Local CSV File Fallback
+    if (df is None or df.empty) and os.path.exists(LOCAL_CSV_FILE):
         try:
             raw_mtime = os.path.getmtime(LOCAL_CSV_FILE)
             mod_time = datetime.fromtimestamp(raw_mtime, tz=ZoneInfo("UTC")).astimezone(ET_ZONE)
             df = pd.read_csv(LOCAL_CSV_FILE)
-            if fetch_error:
-                st.sidebar.warning(f"⚠️ Remote fetch failed ({fetch_error}). Using local fallback.")
         except Exception:
             pass
 
@@ -487,7 +546,7 @@ def is_exact_duplicate(existing_list, candidate):
 def render_dashboard():
     df_raw, scan_time = load_screener_results()
 
-    # 1. Sidebar Header & Filters (Theme toggle removed)
+    # 1. Sidebar Header & Filters
     with st.sidebar:
         st.markdown(
             f"""
@@ -1064,18 +1123,18 @@ def render_dashboard():
         with st.expander("3. Pocket Trader Execution Guide", expanded=False):
             st.markdown(
                 """
-                * **Batch Position Logging:** Select multiple symbols from the 59 tracked assets to track lots simultaneously.
-                * **Target Gain Tracking:** Specify your profit objective (e.g., $10/share). The status badge dynamically turns into **🎯 TARGET REACHED** when prices cross above.
-                * **Quick Editing:** Use the *Quick Edit Existing Position* drawer to update shares, entry date, buy price, or target price at any time.
-                * **Privacy-First Storage:** Positions persist in browser local storage and can be exported or merged anytime via CSV files.
+- **Batch Position Logging:** Select multiple symbols from the 59 tracked assets to track lots simultaneously.
+- **Target Gain Tracking:** Specify your profit objective (e.g., $10/share). The status badge dynamically turns into **🎯 TARGET REACHED** when prices cross above.
+- **Quick Editing:** Use the *Quick Edit Existing Position* drawer to update shares, entry date, buy price, or target price at any time.
+- **Privacy-First Storage:** Positions persist in browser local storage and can be exported or merged anytime via CSV files.
                 """
             )
 
         with st.expander("4. Precision Cloud Scheduling (TN-001)", expanded=False):
             st.markdown(
                 """
-                * **Morning Dip Scan (10:32 AM ET):** Webhook trigger executes 62 minutes into regular session to identify early intraday oversold pullbacks.
-                * **Market Close Scan (4:47 PM ET):** Webhook trigger executes 47 minutes post-close once official daily closing prints and settlements are finalized.
+- **Morning Dip Scan (10:32 AM ET):** Webhook trigger executes 62 minutes into regular session to identify early intraday oversold pullbacks.
+- **Market Close Scan (4:47 PM ET):** Webhook trigger executes 47 minutes post-close once official daily closing prints and settlements are finalized.
                 """
             )
 
