@@ -1073,12 +1073,12 @@ def render_dashboard():
                     return "color: #fbbf24; background-color: rgba(245, 158, 11, 0.20); font-weight: 700; border-radius: 4px;"
                 return "color: #9ca3af;"
 
-            # Add dedicated 'Market Data' visual column with View 📊 icon
+            # Merge chart badge into the Symbol column directly
             display_df = filtered_df.copy()
-            display_df.insert(0, "Market Data", "View 📊")
+            display_df["Symbol_Display"] = display_df["Symbol"].apply(lambda s: f"{s} 📊")
 
             columns_order = [
-                "Market Data", "Symbol", "Company", "Price", "Signal", "RSI_14", "SMA_50", "SMA_200", "Rationale"
+                "Symbol_Display", "Company", "Price", "Signal", "RSI_14", "SMA_50", "SMA_200", "Rationale"
             ]
             display_cols = [c for c in columns_order if c in display_df.columns]
 
@@ -1093,16 +1093,16 @@ def render_dashboard():
                 .map(signal_styler, subset=["Signal"])
             )
 
-            st.caption("💡 **Tip:** Click on **View 📊** or any stock row to open its live Market Details.")
+            st.caption("💡 **Tip:** Click on any stock row to open its live Market Details.")
 
-            # Native single-row click handler (Forces SAME TAB navigation)
+            # Single-row selection triggers instant in-tab navigation
             event = st.dataframe(
                 styled_df,
                 column_config={
-                    "Market Data": st.column_config.TextColumn(
-                        "Market Data",
-                        help="Click to open Wealthsimple-style fundamentals and charts",
-                        width="small"
+                    "Symbol_Display": st.column_config.TextColumn(
+                        "Symbol",
+                        help="Click any stock to view Wealthsimple-style fundamentals",
+                        width="medium"
                     )
                 },
                 use_container_width=True,
@@ -1112,7 +1112,7 @@ def render_dashboard():
                 key="watchlist_table_selection",
             )
 
-            # Detect row click and navigate in the SAME window via query params
+            # Detect clicked row and navigate within the SAME tab
             if hasattr(event, "selection") and event.selection and event.selection.rows:
                 selected_row_idx = event.selection.rows[0]
                 clicked_symbol = filtered_df.iloc[selected_row_idx]["Symbol"]
