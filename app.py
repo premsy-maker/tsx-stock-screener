@@ -621,13 +621,13 @@ def fetch_stock_chart_history(ticker: str, period: str = "1mo", interval: str = 
 # Wealthsimple-Style Market Details Page
 # -----------------------------------------------------------------------------
 def render_market_data_page(ticker: str):
-    # Top spacing cushion
-    st.markdown("<div style='margin-top: 10px;'></div>", unsafe_allow_html=True)
+    # Top spacing cushion to clear Streamlit header
+    st.markdown("<div style='margin-top: 15px;'></div>", unsafe_allow_html=True)
 
     # 1. Top Navigation Bar: Back Button & Stock Switcher
-    col_back, col_spacer, col_switch = st.columns([2.5, 4.5, 3.0])
+    col_back, col_spacer, col_switch = st.columns([3.0, 4.0, 3.0])
     with col_back:
-        if st.button("⬅️ Back to Watchlist", use_container_width=True, type="secondary"):
+        if st.button("⬅️ Back to Watchlist", use_container_width=True, type="primary"):
             st.query_params.clear()
             st.rerun()
 
@@ -1073,12 +1073,12 @@ def render_dashboard():
                     return "color: #fbbf24; background-color: rgba(245, 158, 11, 0.20); font-weight: 700; border-radius: 4px;"
                 return "color: #9ca3af;"
 
-            # Prepare display dataframe with in-place query param URL
+            # Add dedicated 'Market Data' visual column with View 📊 icon
             display_df = filtered_df.copy()
-            display_df["Market Details"] = display_df["Symbol"].apply(lambda s: f"/?ticker={s}")
+            display_df.insert(0, "Market Data", "View 📊")
 
             columns_order = [
-                "Market Details", "Symbol", "Company", "Price", "Signal", "RSI_14", "SMA_50", "SMA_200", "Rationale"
+                "Market Data", "Symbol", "Company", "Price", "Signal", "RSI_14", "SMA_50", "SMA_200", "Rationale"
             ]
             display_cols = [c for c in columns_order if c in display_df.columns]
 
@@ -1093,20 +1093,31 @@ def render_dashboard():
                 .map(signal_styler, subset=["Signal"])
             )
 
-            # Renders 'View 📊' column opening in the SAME browser window
-            st.dataframe(
+            st.caption("💡 **Tip:** Click on **View 📊** or any stock row to open its live Market Details.")
+
+            # Native single-row click handler (Forces SAME TAB navigation)
+            event = st.dataframe(
                 styled_df,
                 column_config={
-                    "Market Details": st.column_config.LinkColumn(
+                    "Market Data": st.column_config.TextColumn(
                         "Market Data",
-                        help="Click to open full market fundamentals and historical charts",
-                        display_text="View 📊",
-                        validate=r"^/\?ticker=.*",
+                        help="Click to open Wealthsimple-style fundamentals and charts",
+                        width="small"
                     )
                 },
                 use_container_width=True,
-                hide_index=True
+                hide_index=True,
+                on_select="rerun",
+                selection_mode="single-row",
+                key="watchlist_table_selection",
             )
+
+            # Detect row click and navigate in the SAME window via query params
+            if hasattr(event, "selection") and event.selection and event.selection.rows:
+                selected_row_idx = event.selection.rows[0]
+                clicked_symbol = filtered_df.iloc[selected_row_idx]["Symbol"]
+                st.query_params["ticker"] = clicked_symbol
+                st.rerun()
 
             st.download_button(
                 label="📥 Export Filtered Watchlist (CSV)",
@@ -1488,7 +1499,7 @@ def render_dashboard():
 
     # -------------------------------------------------------------------------
     # Floating Feedback Popover (Bottom-Right Anchored)
-    # -----------------------------------------------------------------------------
+    # -------------------------------------------------------------------------
     with st.popover("💬 Submit Feedback"):
         st.markdown("### 💬 TrendNorth Feedback")
         fb_name = st.text_input("Name (Optional)", placeholder="e.g. John Doe")
