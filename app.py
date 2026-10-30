@@ -1073,14 +1073,17 @@ def render_dashboard():
                     return "color: #fbbf24; background-color: rgba(245, 158, 11, 0.20); font-weight: 700; border-radius: 4px;"
                 return "color: #9ca3af;"
 
-            # Display columns without artificial URL link column
+            # Prepare display dataframe with in-place query param URL
+            display_df = filtered_df.copy()
+            display_df["Market Details"] = display_df["Symbol"].apply(lambda s: f"/?ticker={s}")
+
             columns_order = [
-                "Symbol", "Company", "Price", "Signal", "RSI_14", "SMA_50", "SMA_200", "Rationale"
+                "Market Details", "Symbol", "Company", "Price", "Signal", "RSI_14", "SMA_50", "SMA_200", "Rationale"
             ]
-            display_cols = [c for c in columns_order if c in filtered_df.columns]
+            display_cols = [c for c in columns_order if c in display_df.columns]
 
             styled_df = (
-                filtered_df[display_cols]
+                display_df[display_cols]
                 .style.format({
                     "Price": "${:.2f}",
                     "SMA_50": "${:.2f}",
@@ -1090,24 +1093,20 @@ def render_dashboard():
                 .map(signal_styler, subset=["Signal"])
             )
 
-            st.caption("💡 **Tip:** Click on any stock row to open its full Market Fundamentals & Charts.")
-
-            # Single-row selection triggers instant in-tab navigation
-            event = st.dataframe(
+            # Renders 'View 📊' column opening in the SAME browser window
+            st.dataframe(
                 styled_df,
+                column_config={
+                    "Market Details": st.column_config.LinkColumn(
+                        "Market Data",
+                        help="Click to open full market fundamentals and historical charts",
+                        display_text="View 📊",
+                        validate=r"^/\?ticker=.*",
+                    )
+                },
                 use_container_width=True,
-                hide_index=True,
-                on_select="rerun",
-                selection_mode="single-row",
-                key="watchlist_table_selection",
+                hide_index=True
             )
-
-            # Detect clicked row and navigate within the SAME tab
-            if hasattr(event, "selection") and event.selection and event.selection.rows:
-                selected_row_idx = event.selection.rows[0]
-                clicked_symbol = filtered_df.iloc[selected_row_idx]["Symbol"]
-                st.query_params["ticker"] = clicked_symbol
-                st.rerun()
 
             st.download_button(
                 label="📥 Export Filtered Watchlist (CSV)",
@@ -1489,7 +1488,7 @@ def render_dashboard():
 
     # -------------------------------------------------------------------------
     # Floating Feedback Popover (Bottom-Right Anchored)
-    # -------------------------------------------------------------------------
+    # -----------------------------------------------------------------------------
     with st.popover("💬 Submit Feedback"):
         st.markdown("### 💬 TrendNorth Feedback")
         fb_name = st.text_input("Name (Optional)", placeholder="e.g. John Doe")
