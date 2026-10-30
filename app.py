@@ -79,9 +79,9 @@ st.markdown(
         color: {text_title} !important;
     }}
 
-    /* Container Spacing */
+    /* Container Spacing: Clears top Streamlit header toolbar */
     .block-container {{
-        padding-top: 1.5rem !important;
+        padding-top: 3.2rem !important;
         padding-bottom: 3rem !important;
     }}
 
@@ -205,7 +205,7 @@ st.markdown(
         margin-bottom: 12px;
     }}
 
-    /* Secondary Buttons */
+    /* Secondary & Primary Buttons */
     button[kind="secondary"] {{
         background-color: {bg_card} !important;
         border: 1px solid {border_col} !important;
@@ -544,7 +544,7 @@ def fetch_stock_market_details(ticker: str):
         mcap = info.get("marketCap")
         if mcap:
             if mcap >= 1e12:
-                mcap_str = f"${mcap / 1e12:.2f}B"
+                mcap_str = f"${mcap / 1e12:.2f}T"
             elif mcap >= 1e9:
                 mcap_str = f"${mcap / 1e9:.2f}B"
             elif mcap >= 1e6:
@@ -621,18 +621,21 @@ def fetch_stock_chart_history(ticker: str, period: str = "1mo", interval: str = 
 # Wealthsimple-Style Market Details Page
 # -----------------------------------------------------------------------------
 def render_market_data_page(ticker: str):
-    # Top Navigation Back Button
-    col_back, col_quick_switch = st.columns([2, 8])
+    # Top spacing cushion
+    st.markdown("<div style='margin-top: 10px;'></div>", unsafe_allow_html=True)
+
+    # 1. Top Navigation Bar: Back Button & Stock Switcher
+    col_back, col_spacer, col_switch = st.columns([2.5, 4.5, 3.0])
     with col_back:
-        if st.button("← Back to Watchlist", use_container_width=True, type="secondary"):
+        if st.button("⬅️ Back to Watchlist", use_container_width=True, type="secondary"):
             st.query_params.clear()
             st.rerun()
 
-    with col_quick_switch:
+    with col_switch:
         all_syms = sorted(list(COMPANY_NAMES.keys()))
         curr_idx = all_syms.index(ticker) if ticker in all_syms else 0
         new_pick = st.selectbox(
-            "Quick switch stock:",
+            "Switch Stock",
             options=all_syms,
             index=curr_idx,
             label_visibility="collapsed"
@@ -641,6 +644,8 @@ def render_market_data_page(ticker: str):
             st.query_params["ticker"] = new_pick
             st.rerun()
 
+    st.markdown("<div style='margin-bottom: 16px;'></div>", unsafe_allow_html=True)
+
     with st.spinner(f"Retrieving fundamental data & technical charts for {ticker}..."):
         d = fetch_stock_market_details(ticker)
 
@@ -648,25 +653,30 @@ def render_market_data_page(ticker: str):
         st.error(f"Unable to retrieve market data for {ticker}. Please return to the watchlist.")
         return
 
-    # Header: Stock Ticker, Company Name, Live Price & Session Change
+    # 2. Header: Prominent Ticker and Subtitle Company Name
     st.markdown(
         f"""
-        <div style="display: flex; align-items: baseline; gap: 12px; margin-top: 10px;">
-            <h1 style="margin: 0; font-size: 2.3rem; font-weight: 800; color: #f9fafb;">{d['symbol']}</h1>
-            <span style="font-size: 1.25rem; font-weight: 500; color: #94a3b8;">{d['shortName']}</span>
+        <div style="margin-bottom: 12px;">
+            <div style="font-size: 2.4rem; font-weight: 800; color: #f9fafb; letter-spacing: -0.5px; line-height: 1.1;">
+                {d['symbol']}
+            </div>
+            <div style="font-size: 1.15rem; font-weight: 500; color: #94a3b8; margin-top: 4px;">
+                {d['shortName']}
+            </div>
         </div>
         """,
         unsafe_allow_html=True
     )
 
+    # 3. Live Price & Session Change Badge
     color_change = "#22c55e" if d['priceDiff'] >= 0 else "#ef4444"
     plus_sign = "+" if d['priceDiff'] >= 0 else ""
     st.markdown(
         f"""
-        <div style="margin-top: 4px; margin-bottom: 18px;">
-            <span style="font-size: 2.1rem; font-weight: 800; color: #f9fafb;">${d['currentPrice']:.2f}</span>
-            <span style="font-size: 1rem; color: #94a3b8; font-weight: 600; margin-left: 4px;">CAD</span>
-            <div style="color: {color_change}; font-size: 1.05rem; font-weight: 700; margin-top: 2px;">
+        <div style="margin-bottom: 20px;">
+            <span style="font-size: 2.2rem; font-weight: 800; color: #f9fafb;">${d['currentPrice']:.2f}</span>
+            <span style="font-size: 1.05rem; color: #94a3b8; font-weight: 600; margin-left: 6px;">CAD</span>
+            <div style="color: {color_change}; font-size: 1.1rem; font-weight: 700; margin-top: 4px;">
                 {plus_sign}${d['priceDiff']:.2f} ({plus_sign}{d['pctDiff']:.2f}%) at close
             </div>
         </div>
@@ -674,20 +684,20 @@ def render_market_data_page(ticker: str):
         unsafe_allow_html=True
     )
 
-    # Historical Price Chart (Wealthsimple Minimal Style)
+    # 4. Historical Price Chart (Wealthsimple Minimal Style)
     chart_tabs = st.radio(
         "Time Horizon",
         ["1M", "3M", "6M", "1Y", "5Y"],
+        index=3,  # Default to 1Y
         horizontal=True,
         label_visibility="collapsed"
     )
 
     period_map = {"1M": "1mo", "3M": "3mo", "6M": "6mo", "1Y": "1y", "5Y": "5y"}
-    hist_data = fetch_stock_chart_history(ticker, period=period_map.get(chart_tabs, "1mo"), interval="1d")
+    hist_data = fetch_stock_chart_history(ticker, period=period_map.get(chart_tabs, "1y"), interval="1d")
 
     if not hist_data.empty:
         fig_price = go.Figure()
-        # Area fill with smooth line
         line_color = "#22c55e" if d['priceDiff'] >= 0 else "#ef4444"
         fill_color = "rgba(34, 197, 94, 0.12)" if d['priceDiff'] >= 0 else "rgba(239, 68, 68, 0.12)"
 
@@ -715,12 +725,12 @@ def render_market_data_page(ticker: str):
 
     st.markdown("---")
 
-    # 1. Market Details Section
+    # 5. Market Details Section
     st.subheader("Market details")
     st.markdown(
         f"""
         <div class="ws-card">
-            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px;">
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 18px;">
                 <div>
                     <div class="ws-metric-label">Open</div>
                     <div class="ws-metric-val">{d['open']}</div>
@@ -751,7 +761,7 @@ def render_market_data_page(ticker: str):
         unsafe_allow_html=True
     )
 
-    # 2. Dividends & Financials Sections (Two Columns)
+    # 6. Dividends & Financials Sections (Two Columns)
     col_div, col_fin = st.columns(2)
     with col_div:
         st.subheader("Dividends")
@@ -785,26 +795,25 @@ def render_market_data_page(ticker: str):
             unsafe_allow_html=True
         )
 
-    # 3. About Company Profile
+    # 7. About Company Profile
     st.subheader(f"About {d['symbol']}")
-    with st.container():
-        st.markdown(
-            f"""
-            <div class="ws-card">
-                <p style="color: #cbd5e1; font-size: 0.96rem; line-height: 1.6; margin-bottom: 20px;">
-                    {d['summary']}
-                </p>
-                <div style="display: flex; flex-wrap: wrap; gap: 24px; padding-top: 14px; border-top: 1px solid #1f2937; color: #94a3b8; font-size: 0.90rem;">
-                    {"<div>🔗 <a href='" + d['website'] + "' target='_blank' style='color:#38bdf8; text-decoration:none; font-weight:600;'>Company website</a></div>" if d['website'] else ""}
-                    <div>📍 <b>Country:</b> {d['country']}</div>
-                    <div>👥 <b>Employees:</b> {d['employees']}</div>
-                    <div>🏢 <b>Industry:</b> {d['industry']}</div>
-                    <div>👤 <b>Key Executive:</b> {d['officer']}</div>
-                </div>
+    st.markdown(
+        f"""
+        <div class="ws-card">
+            <p style="color: #cbd5e1; font-size: 0.96rem; line-height: 1.6; margin-bottom: 20px;">
+                {d['summary']}
+            </p>
+            <div style="display: flex; flex-wrap: wrap; gap: 24px; padding-top: 14px; border-top: 1px solid #1f2937; color: #94a3b8; font-size: 0.90rem;">
+                {"<div>🔗 <a href='" + d['website'] + "' target='_blank' style='color:#38bdf8; text-decoration:none; font-weight:600;'>Company website</a></div>" if d['website'] else ""}
+                <div>📍 <b>Country:</b> {d['country']}</div>
+                <div>👥 <b>Employees:</b> {d['employees']}</div>
+                <div>🏢 <b>Industry:</b> {d['industry']}</div>
+                <div>👤 <b>Key Executive:</b> {d['officer']}</div>
             </div>
-            """,
-            unsafe_allow_html=True
-        )
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
 
 # -----------------------------------------------------------------------------
 # Pocket Trader State Management & Helpers
