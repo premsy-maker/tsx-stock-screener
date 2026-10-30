@@ -7,8 +7,10 @@ from datetime import date, datetime, time as dtime, timedelta
 from zoneinfo import ZoneInfo
 import pandas as pd
 import plotly.express as px
+import plotly.graph_objects as go
 import requests
 import streamlit as st
+import yfinance as yf
 
 # Supabase Client Import
 try:
@@ -120,7 +122,7 @@ st.markdown(
         color: #ffffff !important;
     }}
 
-    /* Metric Cards (Session Clocks) */
+    /* Metric Cards */
     div[data-testid="stMetric"] {{
         background-color: {bg_card} !important;
         border: 1px solid {border_col} !important;
@@ -180,6 +182,27 @@ st.markdown(
     }}
     div.kpi-card-container button p {{
         color: {text_title} !important;
+    }}
+
+    /* Wealthsimple Detail Cards */
+    .ws-card {{
+        background-color: {bg_card};
+        border: 1px solid {border_col};
+        border-radius: 10px;
+        padding: 16px 20px;
+        margin-bottom: 16px;
+    }}
+    .ws-metric-label {{
+        color: {text_sub};
+        font-size: 0.82rem;
+        font-weight: 500;
+        margin-bottom: 2px;
+    }}
+    .ws-metric-val {{
+        color: {text_title};
+        font-size: 1.05rem;
+        font-weight: 700;
+        margin-bottom: 12px;
     }}
 
     /* Secondary Buttons */
@@ -402,7 +425,6 @@ def load_screener_results():
         try:
             supabase: Client = create_client(supabase_url, supabase_key)
             
-            # Query the latest scan timestamp
             latest_run = (
                 supabase.table("screener_results")
                 .select("scan_timestamp")
@@ -414,7 +436,6 @@ def load_screener_results():
             if latest_run.data:
                 latest_ts_str = latest_run.data[0]["scan_timestamp"]
                 
-                # Fetch all records belonging to this scan
                 res = (
                     supabase.table("screener_results")
                     .select("symbol, company, price, signal, rsi_14, sma_50, sma_200, sma_trend, rationale, scan_timestamp")
@@ -424,7 +445,6 @@ def load_screener_results():
 
                 if res.data:
                     df = pd.DataFrame(res.data)
-                    # Align column naming with the frontend
                     df.rename(columns={
                         "symbol": "Symbol",
                         "company": "Company",
@@ -438,7 +458,6 @@ def load_screener_results():
                     }, inplace=True)
 
                     try:
-                        # Parse ISO timestamp to Eastern Time
                         parsed_dt = datetime.fromisoformat(latest_ts_str.replace("Z", "+00:00"))
                         mod_time = parsed_dt.astimezone(ET_ZONE)
                     except Exception:
@@ -504,6 +523,290 @@ def load_screener_results():
         return pd.DataFrame(), None
 
 # -----------------------------------------------------------------------------
+# Fundamental & Wealthsimple-Style Market Data Fetcher
+# -----------------------------------------------------------------------------
+@st.cache_data(ttl=1800)
+def fetch_stock_market_details(ticker: str):
+    """Fetches real-time market metrics, financials, and company profile via yfinance."""
+    try:
+        t = yf.Ticker(ticker)
+        info = t.info
+
+        ex_div_ts = info.get("exDividendDate")
+        ex_div_str = (
+            datetime.fromtimestamp(ex_div_ts).strftime("%B %d, %Y")
+            if ex_div_ts else "Announcement pending"
+        )
+
+        div_yield_val = info.get("dividendYield")
+        div_yield_str = f"{(div_yield_val * 100):.2f}%" if div_yield_val else "N/A"
+
+        mcap = info.get("marketCap")
+        if mcap:
+            if mcap >= 1e12:
+                mcap_str = f"${mcap / 1e12:.2f}B"
+            elif mcap >= 1e9:
+                mcap_str = f"${mcap / 1e9:.2f}B"
+            elif mcap >= 1e6:
+                mcap_str = f"${mcap / 1e6:.2f}M"
+            else:
+                mcap_str = f"${mcap:,.0f}"
+        else:
+            mcap_str = "N/A"
+
+        shares = info.get("sharesOutstanding")
+        if shares:
+            if shares >= 1e9:
+                shares_str = f"{shares / 1e9:.2f}B"
+            elif shares >= 1e6:
+                shares_str = f"{shares / 1e6:.2f}M"
+            else:
+                shares_str = f"{shares:,.0f}"
+        else:
+            shares_str = "N/A"
+
+        pe = info.get("trailingPE") or info.get("forwardPE")
+        pe_str = f"{pe:.2f}" if pe else "N/A"
+
+        open_p = info.get("open") or info.get("regularMarketOpen")
+        prev_close = info.get("previousClose") or open_p or 1.0
+        cur_p = info.get("currentPrice") or info.get("regularMarketPrice") or open_p
+
+        price_diff = (cur_p - prev_close) if cur_p and prev_close else 0.0
+        pct_diff = (price_diff / prev_close * 100) if prev_close else 0.0
+
+        return {
+            "symbol": ticker,
+            "shortName": info.get("shortName") or info.get("longName") or COMPANY_NAMES.get(ticker, ticker),
+            "currentPrice": cur_p if cur_p else 0.0,
+            "priceDiff": price_diff,
+            "pctDiff": pct_diff,
+            "open": f"${open_p:.2f}" if open_p else "N/A",
+            "high": f"${info.get('dayHigh'):.2f}" if info.get('dayHigh') else "N/A",
+            "low": f"${info.get('dayLow'):.2f}" if info.get('dayLow') else "N/A",
+            "week52High": f"${info.get('fiftyTwoWeekHigh'):.2f}" if info.get('fiftyTwoWeekHigh') else "N/A",
+            "week52Low": f"${info.get('fiftyTwoWeekLow'):.2f}" if info.get('fiftyTwoWeekLow') else "N/A",
+            "volume": f"{info.get('volume', 0):,}" if info.get('volume') else "N/A",
+            "avgVolume": f"{info.get('averageVolume', 0):,}" if info.get('averageVolume') else "N/A",
+            "exchange": info.get("exchange", "TSX"),
+            "divYield": div_yield_str,
+            "divFrequency": "Quarterly" if div_yield_val else "None",
+            "exDivDate": ex_div_str,
+            "marketCap": mcap_str,
+            "sharesOut": shares_str,
+            "peRatio": pe_str,
+            "summary": info.get("longBusinessSummary", "Company description and operational breakdown are currently unavailable."),
+            "website": info.get("website", ""),
+            "country": info.get("country", "Canada"),
+            "employees": f"{info.get('fullTimeEmployees', 0):,}" if info.get('fullTimeEmployees') else "N/A",
+            "industry": info.get("industry", "Equities"),
+            "officer": (info.get("companyOfficers", [{}])[0].get("name", "N/A") if info.get("companyOfficers") else "N/A")
+        }
+    except Exception as e:
+        return None
+
+@st.cache_data(ttl=900)
+def fetch_stock_chart_history(ticker: str, period: str = "1mo", interval: str = "1d"):
+    try:
+        t = yf.Ticker(ticker)
+        df_hist = t.history(period=period, interval=interval)
+        if df_hist.empty:
+            return pd.DataFrame()
+        df_hist.reset_index(inplace=True)
+        return df_hist
+    except Exception:
+        return pd.DataFrame()
+
+# -----------------------------------------------------------------------------
+# Wealthsimple-Style Market Details Page
+# -----------------------------------------------------------------------------
+def render_market_data_page(ticker: str):
+    # Top Navigation Back Button
+    col_back, col_quick_switch = st.columns([2, 8])
+    with col_back:
+        if st.button("← Back to Watchlist", use_container_width=True, type="secondary"):
+            st.query_params.clear()
+            st.rerun()
+
+    with col_quick_switch:
+        all_syms = sorted(list(COMPANY_NAMES.keys()))
+        curr_idx = all_syms.index(ticker) if ticker in all_syms else 0
+        new_pick = st.selectbox(
+            "Quick switch stock:",
+            options=all_syms,
+            index=curr_idx,
+            label_visibility="collapsed"
+        )
+        if new_pick != ticker:
+            st.query_params["ticker"] = new_pick
+            st.rerun()
+
+    with st.spinner(f"Retrieving fundamental data & technical charts for {ticker}..."):
+        d = fetch_stock_market_details(ticker)
+
+    if not d:
+        st.error(f"Unable to retrieve market data for {ticker}. Please return to the watchlist.")
+        return
+
+    # Header: Stock Ticker, Company Name, Live Price & Session Change
+    st.markdown(
+        f"""
+        <div style="display: flex; align-items: baseline; gap: 12px; margin-top: 10px;">
+            <h1 style="margin: 0; font-size: 2.3rem; font-weight: 800; color: #f9fafb;">{d['symbol']}</h1>
+            <span style="font-size: 1.25rem; font-weight: 500; color: #94a3b8;">{d['shortName']}</span>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+    color_change = "#22c55e" if d['priceDiff'] >= 0 else "#ef4444"
+    plus_sign = "+" if d['priceDiff'] >= 0 else ""
+    st.markdown(
+        f"""
+        <div style="margin-top: 4px; margin-bottom: 18px;">
+            <span style="font-size: 2.1rem; font-weight: 800; color: #f9fafb;">${d['currentPrice']:.2f}</span>
+            <span style="font-size: 1rem; color: #94a3b8; font-weight: 600; margin-left: 4px;">CAD</span>
+            <div style="color: {color_change}; font-size: 1.05rem; font-weight: 700; margin-top: 2px;">
+                {plus_sign}${d['priceDiff']:.2f} ({plus_sign}{d['pctDiff']:.2f}%) at close
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+    # Historical Price Chart (Wealthsimple Minimal Style)
+    chart_tabs = st.radio(
+        "Time Horizon",
+        ["1M", "3M", "6M", "1Y", "5Y"],
+        horizontal=True,
+        label_visibility="collapsed"
+    )
+
+    period_map = {"1M": "1mo", "3M": "3mo", "6M": "6mo", "1Y": "1y", "5Y": "5y"}
+    hist_data = fetch_stock_chart_history(ticker, period=period_map.get(chart_tabs, "1mo"), interval="1d")
+
+    if not hist_data.empty:
+        fig_price = go.Figure()
+        # Area fill with smooth line
+        line_color = "#22c55e" if d['priceDiff'] >= 0 else "#ef4444"
+        fill_color = "rgba(34, 197, 94, 0.12)" if d['priceDiff'] >= 0 else "rgba(239, 68, 68, 0.12)"
+
+        date_col = "Date" if "Date" in hist_data.columns else hist_data.columns[0]
+        fig_price.add_trace(go.Scatter(
+            x=hist_data[date_col],
+            y=hist_data["Close"],
+            mode="lines",
+            line=dict(color=line_color, width=2.5),
+            fill="tozeroy",
+            fillcolor=fill_color,
+            hoverinfo="x+y",
+            hovertemplate="<b>Date:</b> %{x|%b %d, %Y}<br><b>Price:</b> $%{y:.2f} CAD<extra></extra>"
+        ))
+        fig_price.update_layout(
+            template="plotly_dark",
+            paper_bgcolor="#0b1120",
+            plot_bgcolor="#0b1120",
+            margin=dict(l=0, r=0, t=10, b=10),
+            height=280,
+            xaxis=dict(showgrid=False, showticklabels=True),
+            yaxis=dict(showgrid=True, gridcolor="#1e293b", side="right"),
+        )
+        st.plotly_chart(fig_price, use_container_width=True)
+
+    st.markdown("---")
+
+    # 1. Market Details Section
+    st.subheader("Market details")
+    st.markdown(
+        f"""
+        <div class="ws-card">
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px;">
+                <div>
+                    <div class="ws-metric-label">Open</div>
+                    <div class="ws-metric-val">{d['open']}</div>
+                    <div class="ws-metric-label">High</div>
+                    <div class="ws-metric-val">{d['high']}</div>
+                    <div class="ws-metric-label">52 week high</div>
+                    <div class="ws-metric-val">{d['week52High']}</div>
+                </div>
+                <div>
+                    <div class="ws-metric-label">Low</div>
+                    <div class="ws-metric-val">{d['low']}</div>
+                    <div class="ws-metric-label">52 week low</div>
+                    <div class="ws-metric-val">{d['week52Low']}</div>
+                    <div class="ws-metric-label">Exchange</div>
+                    <div class="ws-metric-val">{d['exchange']}</div>
+                </div>
+                <div>
+                    <div class="ws-metric-label">Volume</div>
+                    <div class="ws-metric-val">{d['volume']}</div>
+                    <div class="ws-metric-label">Average volume</div>
+                    <div class="ws-metric-val">{d['avgVolume']}</div>
+                    <div class="ws-metric-label">Asset Class</div>
+                    <div class="ws-metric-val">Equity / TSX</div>
+                </div>
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+    # 2. Dividends & Financials Sections (Two Columns)
+    col_div, col_fin = st.columns(2)
+    with col_div:
+        st.subheader("Dividends")
+        st.markdown(
+            f"""
+            <div class="ws-card">
+                <div class="ws-metric-label">Frequency</div>
+                <div class="ws-metric-val">{d['divFrequency']}</div>
+                <div class="ws-metric-label">Dividend yield</div>
+                <div class="ws-metric-val">{d['divYield']}</div>
+                <div class="ws-metric-label">Ex-dividend date</div>
+                <div class="ws-metric-val">{d['exDivDate']}</div>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+
+    with col_fin:
+        st.subheader("Financials")
+        st.markdown(
+            f"""
+            <div class="ws-card">
+                <div class="ws-metric-label">Market cap</div>
+                <div class="ws-metric-val">{d['marketCap']}</div>
+                <div class="ws-metric-label">Shares outstanding</div>
+                <div class="ws-metric-val">{d['sharesOut']}</div>
+                <div class="ws-metric-label">P/E ratio</div>
+                <div class="ws-metric-val">{d['peRatio']}</div>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+
+    # 3. About Company Profile
+    st.subheader(f"About {d['symbol']}")
+    with st.container():
+        st.markdown(
+            f"""
+            <div class="ws-card">
+                <p style="color: #cbd5e1; font-size: 0.96rem; line-height: 1.6; margin-bottom: 20px;">
+                    {d['summary']}
+                </p>
+                <div style="display: flex; flex-wrap: wrap; gap: 24px; padding-top: 14px; border-top: 1px solid #1f2937; color: #94a3b8; font-size: 0.90rem;">
+                    {"<div>🔗 <a href='" + d['website'] + "' target='_blank' style='color:#38bdf8; text-decoration:none; font-weight:600;'>Company website</a></div>" if d['website'] else ""}
+                    <div>📍 <b>Country:</b> {d['country']}</div>
+                    <div>👥 <b>Employees:</b> {d['employees']}</div>
+                    <div>🏢 <b>Industry:</b> {d['industry']}</div>
+                    <div>👤 <b>Key Executive:</b> {d['officer']}</div>
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+
+# -----------------------------------------------------------------------------
 # Pocket Trader State Management & Helpers
 # -----------------------------------------------------------------------------
 if "pocket_positions" not in st.session_state:
@@ -544,6 +847,12 @@ def is_exact_duplicate(existing_list, candidate):
 # Main Application Dashboard
 # -----------------------------------------------------------------------------
 def render_dashboard():
+    # Check if a ticker is selected in the URL parameters
+    active_ticker = st.query_params.get("ticker")
+    if active_ticker:
+        render_market_data_page(active_ticker)
+        return
+
     df_raw, scan_time = load_screener_results()
 
     # 1. Sidebar Header & Filters
@@ -559,6 +868,19 @@ def render_dashboard():
 
         if st.button("🔄 Refresh Data Now", use_container_width=True):
             st.cache_data.clear()
+            st.rerun()
+
+        st.markdown("---")
+
+        # Quick Jump to Market Data Details
+        all_symbols = sorted(list(COMPANY_NAMES.keys()))
+        selected_stock_detail = st.selectbox(
+            "📊 Open Market Data Details",
+            options=["-- Select a Stock --"] + all_symbols,
+            help="Choose any TSX ticker to view Wealthsimple-style fundamentals and historical charts."
+        )
+        if selected_stock_detail != "-- Select a Stock --":
+            st.query_params["ticker"] = selected_stock_detail
             st.rerun()
 
         st.markdown("---")
@@ -742,13 +1064,17 @@ def render_dashboard():
                     return "color: #fbbf24; background-color: rgba(245, 158, 11, 0.20); font-weight: 700; border-radius: 4px;"
                 return "color: #9ca3af;"
 
+            # Prepare display dataframe with clickable URL for Market Details
+            display_df = filtered_df.copy()
+            display_df["Market Details"] = display_df["Symbol"].apply(lambda s: f"/?ticker={s}")
+
             columns_order = [
-                "Symbol", "Company", "Price", "Signal", "RSI_14", "SMA_50", "SMA_200", "Rationale"
+                "Market Details", "Symbol", "Company", "Price", "Signal", "RSI_14", "SMA_50", "SMA_200", "Rationale"
             ]
-            display_cols = [c for c in columns_order if c in filtered_df.columns]
+            display_cols = [c for c in columns_order if c in display_df.columns]
 
             styled_df = (
-                filtered_df[display_cols]
+                display_df[display_cols]
                 .style.format({
                     "Price": "${:.2f}",
                     "SMA_50": "${:.2f}",
@@ -758,7 +1084,18 @@ def render_dashboard():
                 .map(signal_styler, subset=["Signal"])
             )
 
-            st.dataframe(styled_df, use_container_width=True, hide_index=True)
+            st.dataframe(
+                styled_df,
+                column_config={
+                    "Market Details": st.column_config.LinkColumn(
+                        "Market Data",
+                        help="Click to open Wealthsimple-style market details and profile",
+                        display_text="View 📊"
+                    )
+                },
+                use_container_width=True,
+                hide_index=True
+            )
 
             st.download_button(
                 label="📥 Export Filtered Watchlist (CSV)",
