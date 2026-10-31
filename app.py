@@ -655,14 +655,20 @@ def render_tradingview_area_chart(df_hist: pd.DataFrame, is_positive: bool = Tru
     # Extract date column
     date_col = "Date" if "Date" in df_hist.columns else df_hist.columns[0]
     
-    # Prepare clean payload for TradingView Lightweight charts: [{ time: 'YYYY-MM-DD', value: price }]
+    # Sort and strictly deduplicate dates
+    df_sorted = df_hist.copy().sort_values(by=date_col)
+    
     chart_points = []
-    for _, row in df_hist.iterrows():
+    seen_dates = set()
+    for _, row in df_sorted.iterrows():
         try:
             d_val = row[date_col]
             time_str = d_val.strftime("%Y-%m-%d") if hasattr(d_val, "strftime") else str(d_val)[:10]
+            if time_str in seen_dates:
+                continue
             close_p = float(row["Close"])
-            if not pd.isna(close_p):
+            if not pd.isna(close_p) and close_p > 0:
+                seen_dates.add(time_str)
                 chart_points.append({"time": time_str, "value": round(close_p, 2)})
         except Exception:
             continue
@@ -675,7 +681,7 @@ def render_tradingview_area_chart(df_hist: pd.DataFrame, is_positive: bool = Tru
     
     # Wealthsimple-grade theme palette
     line_col = "#22c55e" if is_positive else "#ef4444"
-    top_col = "rgba(34, 197, 94, 0.32)" if is_positive else "rgba(239, 68, 68, 0.32)"
+    top_col = "rgba(34, 197, 94, 0.28)" if is_positive else "rgba(239, 68, 68, 0.28)"
     bottom_col = "rgba(34, 197, 94, 0.00)" if is_positive else "rgba(239, 68, 68, 0.00)"
 
     tv_html = f"""
@@ -683,11 +689,13 @@ def render_tradingview_area_chart(df_hist: pd.DataFrame, is_positive: bool = Tru
     <html>
     <head>
         <meta charset="utf-8" />
-        <script src="https://unpkg.com/lightweight-charts/dist/lightweight-charts.standalone.production.js"></script>
+        <script src="https://unpkg.com/lightweight-charts@4.2.1/dist/lightweight-charts.standalone.production.js"></script>
         <style>
-            body {{
+            html, body {{
                 margin: 0;
                 padding: 0;
+                width: 100%;
+                height: 100%;
                 background-color: {bg_main};
                 overflow: hidden;
                 font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
@@ -702,69 +710,71 @@ def render_tradingview_area_chart(df_hist: pd.DataFrame, is_positive: bool = Tru
     <body>
         <div id="tv_chart_container"></div>
         <script>
-            const container = document.getElementById('tv_chart_container');
-            const chart = LightweightCharts.createChart(container, {{
-                width: container.clientWidth,
-                height: 310,
-                layout: {{
-                    background: {{ color: '{bg_main}' }},
-                    textColor: '#94a3b8',
-                    fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-                }},
-                grid: {{
-                    vertLines: {{ visible: false }},
-                    horzLines: {{ color: '#1e293b' }},
-                }},
-                crosshair: {{
-                    vertLine: {{
-                        color: '#64748b',
-                        width: 1,
-                        style: LightweightCharts.LineStyle.Dotted,
-                        labelBackgroundColor: '#1e293b',
-                    }},
-                    horzLine: {{
-                        color: '#64748b',
-                        width: 1,
-                        style: LightweightCharts.LineStyle.Dotted,
-                        labelBackgroundColor: '#1e293b',
-                    }},
-                }},
-                rightPriceScale: {{
-                    borderColor: '#1e293b',
-                    scaleMargins: {{
-                        top: 0.12,
-                        bottom: 0.08,
-                    }},
-                }},
-                timeScale: {{
-                    borderColor: '#1e293b',
-                    timeVisible: true,
-                    secondsVisible: false,
-                }},
-                handleScroll: false,
-                handleScale: false,
-            }});
+            (function() {{
+                const container = document.getElementById('tv_chart_container');
+                if (!container || typeof LightweightCharts === 'undefined') return;
 
-            const areaSeries = chart.addAreaSeries({{
-                topColor: '{top_col}',
-                bottomColor: '{bottom_col}',
-                lineColor: '{line_col}',
-                lineWidth: 2.5,
-                priceFormat: {{
-                    type: 'price',
-                    precision: 2,
-                    minMove: 0.01,
-                }},
-            }});
+                const chart = LightweightCharts.createChart(container, {{
+                    autoSize: true,
+                    layout: {{
+                        background: {{ color: '{bg_main}' }},
+                        textColor: '#94a3b8',
+                        fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+                    }},
+                    grid: {{
+                        vertLines: {{ visible: false }},
+                        horzLines: {{ color: '#1e293b' }},
+                    }},
+                    crosshair: {{
+                        vertLine: {{
+                            color: '#64748b',
+                            width: 1,
+                            style: LightweightCharts.LineStyle.Dotted,
+                            labelBackgroundColor: '#1e293b',
+                        }},
+                        horzLine: {{
+                            color: '#64748b',
+                            width: 1,
+                            style: LightweightCharts.LineStyle.Dotted,
+                            labelBackgroundColor: '#1e293b',
+                        }},
+                    }},
+                    rightPriceScale: {{
+                        borderColor: '#1e293b',
+                        scaleMargins: {{
+                            top: 0.12,
+                            bottom: 0.08,
+                        }},
+                    }},
+                    timeScale: {{
+                        borderColor: '#1e293b',
+                        timeVisible: true,
+                        secondsVisible: false,
+                    }},
+                    handleScroll: false,
+                    handleScale: false,
+                }});
 
-            const data = {json_points};
-            areaSeries.setData(data);
-            chart.timeScale().fitContent();
+                const areaSeries = chart.addAreaSeries ? 
+                    chart.addAreaSeries({{
+                        topColor: '{top_col}',
+                        bottomColor: '{bottom_col}',
+                        lineColor: '{line_col}',
+                        lineWidth: 2.5,
+                        priceFormat: {{ type: 'price', precision: 2, minMove: 0.01 }},
+                    }}) :
+                    chart.addSeries(LightweightCharts.AreaSeries, {{
+                        topColor: '{top_col}',
+                        bottomColor: '{bottom_col}',
+                        lineColor: '{line_col}',
+                        lineWidth: 2.5,
+                        priceFormat: {{ type: 'price', precision: 2, minMove: 0.01 }},
+                    }});
 
-            // Auto-resize on window resize
-            window.addEventListener('resize', () => {{
-                chart.applyOptions({{ width: container.clientWidth }});
-            }});
+                const data = {json_points};
+                areaSeries.setData(data);
+                chart.timeScale().fitContent();
+            }})();
         </script>
     </body>
     </html>
