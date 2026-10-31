@@ -133,7 +133,7 @@ st.markdown(
         color: #0369a1 !important;
     }}
 
-    /* Universal Metric Cards (Dashboard & Pocket Trader) */
+    /* Universal Metric Cards */
     div[data-testid="stMetric"] {{
         background-color: #ffffff !important;
         border: 1px solid {border_col} !important;
@@ -372,10 +372,12 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# Core Baseline Watchlist Company Names Mapping
+# Core Baseline Watchlist Company Names Mapping (Expanded with TSX Blue Chips)
 BASE_COMPANY_NAMES = {
     "XEQT.TO": "iShares Core Equity ETF Portfolio",
     "XIU.TO": "iShares S&P/TSX 60 Index ETF",
+    "AC.TO": "Air Canada",
+    "AQN.TO": "Algonquin Power & Utilities",
     "RY.TO": "Royal Bank of Canada",
     "TD.TO": "Toronto-Dominion Bank",
     "BMO.TO": "Bank of Montreal",
@@ -439,25 +441,41 @@ ALL_SIGNAL_TYPES = ["BUY / ACCUMULATE", "SELL / EXIT", "TRIM / TAKE PROFIT", "KE
 DEFAULT_ACTIVE_SIGNALS = ["BUY / ACCUMULATE", "SELL / EXIT", "TRIM / TAKE PROFIT"]
 
 # -----------------------------------------------------------------------------
-# Dynamic Name Resolver with In-Memory Caching
+# Robust Dynamic Ticker & Name Resolver (Auto-Appends .TO for TSX)
 # -----------------------------------------------------------------------------
 @st.cache_data(ttl=86400)
-def resolve_company_name(ticker: str) -> str:
-    ticker = str(ticker).strip().upper()
-    if ticker in BASE_COMPANY_NAMES:
-        return BASE_COMPANY_NAMES[ticker]
-    try:
-        t = yf.Ticker(ticker)
-        name = t.info.get("shortName") or t.info.get("longName")
-        if name:
-            return name
-    except Exception:
-        pass
-    return ticker
+def sanitize_and_resolve_ticker(raw_sym: str) -> tuple[str, str]:
+    """Ensures Canadian TSX format and fetches full company name dynamically."""
+    sym = str(raw_sym).strip().upper()
+    if not sym:
+        return "", ""
+
+    # If it is already in our dictionary, return right away
+    if sym in BASE_COMPANY_NAMES:
+        return sym, BASE_COMPANY_NAMES[sym]
+    if f"{sym}.TO" in BASE_COMPANY_NAMES:
+        return f"{sym}.TO", BASE_COMPANY_NAMES[f"{sym}.TO"]
+
+    # Try resolving via yfinance
+    candidates = [sym] if ("." in sym or sym.endswith(".TO")) else [f"{sym}.TO", sym]
+    for cand in candidates:
+        try:
+            t = yf.Ticker(cand)
+            info = t.info
+            if info and ("shortName" in info or "regularMarketPrice" in info or "previousClose" in info):
+                name = info.get("shortName") or info.get("longName") or cand
+                return cand, name
+        except Exception:
+            continue
+
+    return sym, sym
 
 # -----------------------------------------------------------------------------
-# Session State Initialization (Pre-Widget Registration)
+# User-Added Custom Watchlist State
 # -----------------------------------------------------------------------------
+if "custom_watchlist_symbols" not in st.session_state:
+    st.session_state.custom_watchlist_symbols = []
+
 if "filter_signals" not in st.session_state:
     st.session_state.filter_signals = DEFAULT_ACTIVE_SIGNALS.copy()
 if "filter_rsi" not in st.session_state:
@@ -524,6 +542,57 @@ def get_tsx_market_status():
         return "CLOSED", "Market Closed (Post-Session)", "Session Ended", "Opens 9:30 AM ET next trading day"
 
 # -----------------------------------------------------------------------------
+# On-Demand Technical Indicator Engine (TN-007 Core)
+# -----------------------------------------------------------------------------
+@st.cache_data(ttl=600)
+def calculate_on_demand_technicals(ticker: str):
+    """Calculates RSI_14, SMA_50, SMA_200, and signal dynamically for any ticker."""
+    try:
+        t = yf.Ticker(ticker)
+        df_hist = t.history(period="1y", interval="1d")
+        if df_hist.empty or len(df_hist) < 20:
+            return None
+
+        closes = df_hist["Close"]
+        cur_price = float(closes.iloc[-1])
+
+        sma_50 = float(closes.rolling(window=50).mean().iloc[-1]) if len(closes) >= 50 else float(closes.mean())
+        sma_200 = float(closes.rolling(window=200).mean().iloc[-1]) if len(closes) >= 200 else float(closes.mean())
+
+        delta = closes.diff()
+        gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+        loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+        rs = gain / loss
+        rsi_14 = float((100 - (100 / (1 + rs))).iloc[-1])
+
+        if pd.isna(rsi_14):
+            rsi_14 = 50.0
+
+        if sma_50 > sma_200 and rsi_14 <= 40.0:
+            signal = "BUY / ACCUMULATE"
+            rationale = "Bullish trend + Pullback dip"
+        elif sma_50 < sma_200:
+            signal = "SELL / EXIT"
+            rationale = "Death Cross (Bearish trend)"
+        elif rsi_14 >= 75.0:
+            signal = "TRIM / TAKE PROFIT"
+            rationale = "Overextended momentum"
+        else:
+            signal = "KEEP / HOLD"
+            rationale = "Trading within baseline"
+
+        return {
+            "price": cur_price,
+            "sma_50": sma_50,
+            "sma_200": sma_200,
+            "rsi_14": rsi_14,
+            "signal": signal,
+            "rationale": rationale,
+        }
+    except Exception:
+        return None
+
+# -----------------------------------------------------------------------------
 # Resilient Data Loader with Supabase Primary & Cloud Fallback
 # -----------------------------------------------------------------------------
 @st.cache_data(ttl=60)
@@ -538,7 +607,6 @@ def load_screener_results():
     if supabase_url and supabase_key and create_client is not None:
         try:
             supabase: Client = create_client(supabase_url, supabase_key)
-            
             latest_run = (
                 supabase.table("screener_results")
                 .select("scan_timestamp")
@@ -549,7 +617,6 @@ def load_screener_results():
 
             if latest_run.data:
                 latest_ts_str = latest_run.data[0]["scan_timestamp"]
-                
                 res = (
                     supabase.table("screener_results")
                     .select("symbol, company, price, signal, rsi_14, sma_50, sma_200, sma_trend, rationale, scan_timestamp")
@@ -586,7 +653,6 @@ def load_screener_results():
             "Cache-Control": "no-cache",
             "Pragma": "no-cache",
         }
-
         if "GITHUB_TOKEN" in st.secrets:
             headers["Authorization"] = f"token {st.secrets['GITHUB_TOKEN']}"
 
@@ -616,7 +682,7 @@ def load_screener_results():
             df.rename(columns={"Ticker": "Symbol"}, inplace=True)
 
         if "Company" not in df.columns and "Symbol" in df.columns:
-            df["Company"] = df["Symbol"].map(resolve_company_name)
+            df["Company"] = df["Symbol"].map(lambda s: sanitize_and_resolve_ticker(s)[1])
 
         for col in ["Price", "RSI_14", "SMA_50", "SMA_200"]:
             if col in df.columns:
@@ -635,67 +701,14 @@ def load_screener_results():
         return pd.DataFrame(), None
 
 # -----------------------------------------------------------------------------
-# On-Demand Technical Indicator Engine (TN-007 Core)
-# -----------------------------------------------------------------------------
-@st.cache_data(ttl=600)
-def calculate_on_demand_technicals(ticker: str):
-    """Calculates RSI_14, SMA_50, SMA_200, and signal dynamically for any user ticker."""
-    try:
-        t = yf.Ticker(ticker)
-        df_hist = t.history(period="1y", interval="1d")
-        if df_hist.empty or len(df_hist) < 20:
-            return None
-
-        closes = df_hist["Close"]
-        cur_price = float(closes.iloc[-1])
-
-        # 50-day and 200-day Simple Moving Averages
-        sma_50 = float(closes.rolling(window=50).mean().iloc[-1]) if len(closes) >= 50 else float(closes.mean())
-        sma_200 = float(closes.rolling(window=200).mean().iloc[-1]) if len(closes) >= 200 else float(closes.mean())
-
-        # 14-day RSI (Wilder's Smoothing)
-        delta = closes.diff()
-        gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
-        loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
-        rs = gain / loss
-        rsi_14 = float((100 - (100 / (1 + rs))).iloc[-1])
-
-        if pd.isna(rsi_14):
-            rsi_14 = 50.0
-
-        # TrendNorth Standard Momentum Signal Engine
-        if sma_50 > sma_200 and rsi_14 <= 40.0:
-            signal = "BUY / ACCUMULATE"
-            rationale = "Bullish trend + Pullback dip"
-        elif sma_50 < sma_200:
-            signal = "SELL / EXIT"
-            rationale = "Death Cross (Bearish trend)"
-        elif rsi_14 >= 75.0:
-            signal = "TRIM / TAKE PROFIT"
-            rationale = "Overextended momentum"
-        else:
-            signal = "KEEP / HOLD"
-            rationale = "Trading within baseline"
-
-        return {
-            "price": cur_price,
-            "sma_50": sma_50,
-            "sma_200": sma_200,
-            "rsi_14": rsi_14,
-            "signal": signal,
-            "rationale": rationale,
-        }
-    except Exception:
-        return None
-
-# -----------------------------------------------------------------------------
 # Fundamental & Market Data Fetcher
 # -----------------------------------------------------------------------------
 @st.cache_data(ttl=1800)
 def fetch_stock_market_details(ticker: str):
     """Fetches real-time market metrics, financials, and company profile via yfinance."""
+    clean_sym, company_name = sanitize_and_resolve_ticker(ticker)
     try:
-        t = yf.Ticker(ticker)
+        t = yf.Ticker(clean_sym)
         info = t.info
 
         ex_div_ts = info.get("exDividendDate")
@@ -742,8 +755,8 @@ def fetch_stock_market_details(ticker: str):
         pct_diff = (price_diff / prev_close * 100) if prev_close else 0.0
 
         return {
-            "symbol": ticker,
-            "shortName": info.get("shortName") or info.get("longName") or resolve_company_name(ticker),
+            "symbol": clean_sym,
+            "shortName": info.get("shortName") or info.get("longName") or company_name,
             "currentPrice": cur_p if cur_p else 0.0,
             "priceDiff": price_diff,
             "pctDiff": pct_diff,
@@ -774,8 +787,9 @@ def fetch_stock_market_details(ticker: str):
 
 @st.cache_data(ttl=900)
 def fetch_stock_chart_history(ticker: str, period: str = "1y", interval: str = "1d"):
+    clean_sym, _ = sanitize_and_resolve_ticker(ticker)
     try:
-        t = yf.Ticker(ticker)
+        t = yf.Ticker(clean_sym)
         df_hist = t.history(period=period, interval=interval)
         if df_hist.empty:
             return pd.DataFrame()
@@ -785,7 +799,7 @@ def fetch_stock_chart_history(ticker: str, period: str = "1y", interval: str = "
         return pd.DataFrame()
 
 # -----------------------------------------------------------------------------
-# TradingView Lightweight Interactive Financial Chart (Clean Light Palette)
+# TradingView Lightweight Interactive Financial Chart
 # -----------------------------------------------------------------------------
 def render_tradingview_area_chart(df_hist: pd.DataFrame, is_positive: bool = True):
     if df_hist.empty or "Close" not in df_hist.columns:
@@ -918,36 +932,56 @@ def render_tradingview_area_chart(df_hist: pd.DataFrame, is_positive: bool = Tru
     components.html(tv_html, height=320)
 
 # -----------------------------------------------------------------------------
-# Wealthsimple-Style Market Details Page
+# Wealthsimple-Style Market Details Page (With "Add to Watchlist" Button)
 # -----------------------------------------------------------------------------
 def render_market_data_page(ticker: str):
+    clean_sym, company_name = sanitize_and_resolve_ticker(ticker)
     st.markdown("<div style='margin-top: 25px;'></div>", unsafe_allow_html=True)
 
-    # 1. Top Navigation Bar: Back Button & Dynamic Stock Switcher
-    col_back, col_spacer, col_switch = st.columns([3.0, 3.5, 3.5])
+    # 1. Top Navigation Bar: Back Button, Add-to-Watchlist, & Autocomplete Switcher
+    col_back, col_add_watch, col_switch = st.columns([2.5, 3.5, 4.0])
     with col_back:
         if st.button("⬅️ Back to Watchlist", use_container_width=True, type="primary"):
             st.query_params.clear()
             st.rerun()
 
+    with col_add_watch:
+        # Check if symbol is already in custom watchlist or baseline
+        is_already_tracked = clean_sym in BASE_COMPANY_NAMES or clean_sym in st.session_state.custom_watchlist_symbols
+        if not is_already_tracked:
+            if st.button(f"➕ Monitor {clean_sym} on Watchlist", use_container_width=True):
+                st.session_state.custom_watchlist_symbols.append(clean_sym)
+                st.success(f"{clean_sym} is now monitored on your main screener table!")
+                st.rerun()
+        else:
+            st.button(f"✓ {clean_sym} is Actively Monitored", disabled=True, use_container_width=True)
+
     with col_switch:
-        new_pick_input = st.text_input(
-            "Search Ticker",
-            value=ticker,
-            placeholder="Search any TSX / US ticker (e.g. SHOP.TO, AQN.TO)",
+        # Prepopulate options with searchable format "TICKER — Company"
+        searchable_list = [f"{sym} — {BASE_COMPANY_NAMES[sym]}" for sym in sorted(BASE_COMPANY_NAMES.keys())]
+        curr_label = f"{clean_sym} — {company_name}"
+        if curr_label not in searchable_list:
+            searchable_list.insert(0, curr_label)
+
+        curr_idx = searchable_list.index(curr_label) if curr_label in searchable_list else 0
+        new_pick_str = st.selectbox(
+            "Switch Stock",
+            options=searchable_list,
+            index=curr_idx,
             label_visibility="collapsed"
-        ).strip().upper()
-        if new_pick_input and new_pick_input != ticker:
-            st.query_params["ticker"] = new_pick_input
+        )
+        picked_sym = new_pick_str.split(" — ")[0].strip()
+        if picked_sym != clean_sym:
+            st.query_params["ticker"] = picked_sym
             st.rerun()
 
     st.markdown("<div style='margin-bottom: 20px;'></div>", unsafe_allow_html=True)
 
-    with st.spinner(f"Retrieving fundamental data & technical charts for {ticker}..."):
-        d = fetch_stock_market_details(ticker)
+    with st.spinner(f"Retrieving fundamental data & technical charts for {clean_sym}..."):
+        d = fetch_stock_market_details(clean_sym)
 
     if not d:
-        st.error(f"Unable to retrieve market data for {ticker}. Please ensure the ticker symbol is valid (e.g., add '.TO' for TSX equities).")
+        st.error(f"Unable to retrieve market data for {clean_sym}. Please ensure the symbol is valid.")
         return
 
     # 2. Header: Prominent Ticker and Subtitle Company Name
@@ -992,7 +1026,7 @@ def render_market_data_page(ticker: str):
     )
 
     period_map = {"1M": "1mo", "3M": "3mo", "6M": "6mo", "1Y": "1y", "5Y": "5y"}
-    hist_data = fetch_stock_chart_history(ticker, period=period_map.get(chart_tabs, "1y"), interval="1d")
+    hist_data = fetch_stock_chart_history(clean_sym, period=period_map.get(chart_tabs, "1y"), interval="1d")
 
     # Render TradingView Interactive Area Chart
     render_tradingview_area_chart(hist_data, is_positive=is_positive)
@@ -1047,7 +1081,7 @@ def render_market_data_page(ticker: str):
         unsafe_allow_html=True
     )
 
-    # 6. Dividends & Financials Sections (Two High-Contrast Column Cards)
+    # 6. Dividends & Financials Sections
     col_div, col_fin = st.columns(2)
     with col_div:
         st.markdown("### Dividends")
@@ -1166,7 +1200,7 @@ def render_dashboard():
 
     df_raw, scan_time = load_screener_results()
 
-    # 1. Sidebar Header, On-Demand Search & Filters
+    # 1. Sidebar Header, Autocomplete Lookup & Filters
     with st.sidebar:
         st.markdown(
             f"""
@@ -1183,17 +1217,34 @@ def render_dashboard():
 
         st.markdown("---")
 
-        # Dynamic On-Demand Symbol Lookup (TN-007)
-        st.markdown("**🔍 On-Demand Asset Lookup**")
-        quick_search_sym = st.text_input(
-            "Quick Search Any Symbol",
-            placeholder="Type any TSX or US ticker (e.g. AQN.TO, CSU.TO, AAPL)",
+        # Autocomplete Dropdown Search (Solves Issues 1, 2, and 3)
+        st.markdown("**📊 Open Market Data Details**")
+        searchable_options = ["-- Select or Search a Stock --"] + [
+            f"{sym} — {BASE_COMPANY_NAMES[sym]}" for sym in sorted(BASE_COMPANY_NAMES.keys())
+        ]
+        
+        selected_stock_label = st.selectbox(
+            "Open Market Data Details",
+            options=searchable_options,
+            help="Start typing any ticker (e.g. AC, SHOP, AQN) or company name for instant matches.",
             label_visibility="collapsed"
-        ).strip().upper()
+        )
+        if selected_stock_label != "-- Select or Search a Stock --":
+            target_sym = selected_stock_label.split(" — ")[0].strip()
+            st.query_params["ticker"] = target_sym
+            st.rerun()
 
-        if st.button("📊 Open Market View", use_container_width=True):
-            if quick_search_sym:
-                st.query_params["ticker"] = quick_search_sym
+        # Instant Custom Ticker Form with Enter-Key support (Solves Issue 3 & 4)
+        with st.form("custom_lookup_form", clear_on_submit=True):
+            user_typed_ticker = st.text_input(
+                "Or enter any custom ticker:",
+                placeholder="e.g. AC, AQN, AAPL",
+                help="Type any symbol and hit Enter to view its live TradingView chart and technicals."
+            )
+            lookup_submitted = st.form_submit_button("Search & Open ➔", use_container_width=True)
+            if lookup_submitted and user_typed_ticker.strip():
+                clean_sym, _ = sanitize_and_resolve_ticker(user_typed_ticker)
+                st.query_params["ticker"] = clean_sym
                 st.rerun()
 
         st.markdown("---")
@@ -1225,7 +1276,7 @@ def render_dashboard():
         )
 
         search_query = st.text_input(
-            "Filter Filtered Table",
+            "Filter Watchlist Table",
             placeholder="e.g. SHOP, BMO, Enbridge",
             key="filter_search",
         ).strip().upper()
@@ -1233,6 +1284,29 @@ def render_dashboard():
         st.markdown("---")
         st.caption("ℹ️ **Educational / Non-Financial Advice Disclaimer**")
         st.caption("TrendNorth is an algorithmic research platform for TSX securities. All indicators and alerts are mathematical representations for self-directed screening and do not constitute financial advice.")
+
+    # Inject any custom symbols the user clicked "➕ Monitor" on
+    if not df_raw.empty and st.session_state.custom_watchlist_symbols:
+        new_rows = []
+        existing_syms = set(df_raw["Symbol"].dropna().unique())
+        for cust_sym in st.session_state.custom_watchlist_symbols:
+            if cust_sym not in existing_syms:
+                t_data = calculate_on_demand_technicals(cust_sym)
+                if t_data:
+                    _, company_name = sanitize_and_resolve_ticker(cust_sym)
+                    new_rows.append({
+                        "Symbol": cust_sym,
+                        "Company": company_name,
+                        "Price": t_data["price"],
+                        "Signal": t_data["signal"],
+                        "RSI_14": t_data["rsi_14"],
+                        "SMA_50": t_data["sma_50"],
+                        "SMA_200": t_data["sma_200"],
+                        "SMA_Trend": "Bullish" if t_data["sma_50"] > t_data["sma_200"] else "Bearish",
+                        "Rationale": t_data["rationale"]
+                    })
+        if new_rows:
+            df_raw = pd.concat([df_raw, pd.DataFrame(new_rows)], ignore_index=True)
 
     # 2. Main Title & Session Clock Header
     status_label, status_detail, elapsed_time, time_to_close = get_tsx_market_status()
@@ -1479,7 +1553,7 @@ def render_dashboard():
             st.write("**Option A: Add Any Symbol On Demand**")
             col_cust1, col_cust2, col_cust3, col_cust4, col_cust5 = st.columns(5)
             with col_cust1:
-                custom_sym = st.text_input("Ticker Symbol", placeholder="e.g. AQN.TO, CSU.TO, AAPL").strip().upper()
+                custom_sym_input = st.text_input("Ticker Symbol", placeholder="e.g. AC, AQN, AAPL").strip().upper()
             with col_cust2:
                 custom_date = st.date_input("Entry Date", value=date.today(), key="custom_entry_date")
             with col_cust3:
@@ -1490,9 +1564,10 @@ def render_dashboard():
                 custom_gain = st.number_input("Target Gain ($/sh)", min_value=0.1, value=5.0, step=0.5, key="custom_entry_gain")
 
             if st.button("➕ Add Custom Position to Tracker", type="primary"):
-                if custom_sym:
+                if custom_sym_input:
+                    resolved_sym, _ = sanitize_and_resolve_ticker(custom_sym_input)
                     cand = {
-                        "Symbol": custom_sym,
+                        "Symbol": resolved_sym,
                         "Buy Date": str(custom_date),
                         "Buy Price": float(custom_price),
                         "Shares": int(custom_shares),
@@ -1501,7 +1576,7 @@ def render_dashboard():
                     if not is_exact_duplicate(st.session_state.pocket_positions, cand):
                         st.session_state.pocket_positions.append(cand)
                         sync_pocket_to_storage()
-                        st.success(f"Added {custom_sym} to your Pocket Trader!")
+                        st.success(f"Added {resolved_sym} to your Pocket Trader!")
                         st.rerun()
                     else:
                         st.warning("This exact position is already logged.")
@@ -1528,9 +1603,10 @@ def render_dashboard():
                         if not m.empty:
                             cur_price = float(m["Price"].iloc[0])
 
+                    _, comp_name = sanitize_and_resolve_ticker(sym)
                     staging_rows.append({
                         "Symbol": sym,
-                        "Company": resolve_company_name(sym),
+                        "Company": comp_name,
                         "Buy Date": str(date.today()),
                         "Buy Price": round(cur_price, 2),
                         "Shares": 10,
@@ -1583,7 +1659,6 @@ def render_dashboard():
                 sig = "—"
                 rsi = 50.0
 
-                # 1. Match from screener batch if available
                 matched_in_batch = False
                 if not df_raw.empty:
                     match = df_raw[df_raw["Symbol"] == sym]
@@ -1593,7 +1668,6 @@ def render_dashboard():
                         rsi = float(match["RSI_14"].iloc[0])
                         matched_in_batch = True
 
-                # 2. TN-007 Dynamic Fallback for unlisted/custom symbols
                 if not matched_in_batch:
                     tech = calculate_on_demand_technicals(sym)
                     if tech:
@@ -1608,10 +1682,11 @@ def render_dashboard():
                 target_price = buy_p + tgt_gain
                 target_reached = cur_price >= target_price
 
+                _, comp_name = sanitize_and_resolve_ticker(sym)
                 calc_rows.append({
                     "Index": i,
                     "Symbol": sym,
-                    "Company": resolve_company_name(sym),
+                    "Company": comp_name,
                     "Buy Date": pos.get("Buy Date", "—"),
                     "Buy Price": buy_p,
                     "Current Price": cur_price,
@@ -1748,9 +1823,10 @@ def render_dashboard():
                                     skipped_duplicates = 0
 
                                     for _, row in imp_df.iterrows():
-                                        sym = str(row["Symbol"]).strip().upper()
+                                        raw_sym = str(row["Symbol"]).strip().upper()
+                                        clean_sym, _ = sanitize_and_resolve_ticker(raw_sym)
                                         cand = {
-                                            "Symbol": sym,
+                                            "Symbol": clean_sym,
                                             "Buy Date": str(row.get("Buy Date", date.today())),
                                             "Buy Price": float(row["Buy Price"]),
                                             "Shares": int(row["Shares"]),
