@@ -621,8 +621,8 @@ def fetch_stock_chart_history(ticker: str, period: str = "1mo", interval: str = 
 # Wealthsimple-Style Market Details Page
 # -----------------------------------------------------------------------------
 def render_market_data_page(ticker: str):
-    # Top spacing cushion to clear Streamlit header
-    st.markdown("<div style='margin-top: 15px;'></div>", unsafe_allow_html=True)
+    # Generous top clearance so the back button is 100% visible
+    st.markdown("<div style='margin-top: 25px;'></div>", unsafe_allow_html=True)
 
     # 1. Top Navigation Bar: Back Button & Stock Switcher
     col_back, col_spacer, col_switch = st.columns([3.0, 4.0, 3.0])
@@ -644,7 +644,7 @@ def render_market_data_page(ticker: str):
             st.query_params["ticker"] = new_pick
             st.rerun()
 
-    st.markdown("<div style='margin-bottom: 16px;'></div>", unsafe_allow_html=True)
+    st.markdown("<div style='margin-bottom: 20px;'></div>", unsafe_allow_html=True)
 
     with st.spinner(f"Retrieving fundamental data & technical charts for {ticker}..."):
         d = fetch_stock_market_details(ticker)
@@ -1055,9 +1055,6 @@ def render_dashboard():
     # -------------------------------------------------------------------------
     # TAB 1: Filtered Watchlist 
     # -------------------------------------------------------------------------
-    # -------------------------------------------------------------------------
-    # TAB 1: Filtered Watchlist 
-    # -------------------------------------------------------------------------
     with tab_data:
         col_tab_info, col_clear = st.columns([7.5, 2.5])
         with col_clear:
@@ -1076,13 +1073,10 @@ def render_dashboard():
                     return "color: #fbbf24; background-color: rgba(245, 158, 11, 0.20); font-weight: 700; border-radius: 4px;"
                 return "color: #9ca3af;"
 
-            # Format the clean display dataframe
+            # Prepare columns without any LinkColumn (prevents target="_blank" tab multiplication)
             display_df = filtered_df.copy()
-            # JavaScript-safe query parameter link
-            display_df["Action"] = display_df["Symbol"].apply(lambda s: f"?ticker={s}")
-
             columns_order = [
-                "Action", "Symbol", "Company", "Price", "Signal", "RSI_14", "SMA_50", "SMA_200", "Rationale"
+                "Symbol", "Company", "Price", "Signal", "RSI_14", "SMA_50", "SMA_200", "Rationale"
             ]
             display_cols = [c for c in columns_order if c in display_df.columns]
 
@@ -1097,41 +1091,24 @@ def render_dashboard():
                 .map(signal_styler, subset=["Signal"])
             )
 
-            # Renders clean dataframe without row-selection checkboxes
-            st.dataframe(
+            st.caption("💡 **Tip:** Click on any stock row to open its live Market Details.")
+
+            # Single-row selection triggers instant in-tab navigation
+            event = st.dataframe(
                 styled_df,
-                column_config={
-                    "Action": st.column_config.LinkColumn(
-                        "Market Data",
-                        help="View fundamentals, financials, and charts",
-                        display_text="View 📊",
-                    ),
-                    "Symbol": st.column_config.TextColumn("Symbol", width="small"),
-                    "Company": st.column_config.TextColumn("Company", width="medium"),
-                },
                 use_container_width=True,
-                hide_index=True
+                hide_index=True,
+                on_select="rerun",
+                selection_mode="single-row",
+                key="watchlist_table_selection",
             )
 
-            # JS snippet that intercepts all internal ?ticker= clicks and forces SAME-TAB navigation
-            st.markdown(
-                """
-                <script>
-                const observer = new MutationObserver(() => {
-                    const links = parent.document.querySelectorAll('a[href*="?ticker="]');
-                    links.forEach(a => {
-                        a.setAttribute('target', '_self');
-                        a.onclick = (e) => {
-                            e.preventDefault();
-                            parent.window.location.search = a.getAttribute('href');
-                        };
-                    });
-                });
-                observer.observe(parent.document.body, { childList: true, subtree: true });
-                </script>
-                """,
-                unsafe_allow_html=True
-            )
+            # Detect clicked row and navigate within the EXACT SAME tab
+            if hasattr(event, "selection") and event.selection and event.selection.rows:
+                selected_row_idx = event.selection.rows[0]
+                clicked_symbol = filtered_df.iloc[selected_row_idx]["Symbol"]
+                st.query_params["ticker"] = clicked_symbol
+                st.rerun()
 
             st.download_button(
                 label="📥 Export Filtered Watchlist (CSV)",
@@ -1139,6 +1116,7 @@ def render_dashboard():
                 file_name=f"trendnorth_watchlist_{datetime.now(ET_ZONE).strftime('%Y%m%d')}.csv",
                 mime="text/csv",
             )
+
     # -------------------------------------------------------------------------
     # TAB 2: Pocket Trader
     # -------------------------------------------------------------------------
