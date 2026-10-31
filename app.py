@@ -445,7 +445,6 @@ EXTENDED_CATALOG = {
     "BB.TO": "BlackBerry Limited",
     "CJT.TO": "Cargojet Inc.",
     "BBD-B.TO": "Bombardier Inc.",
-    "POW.TO": "Power Corporation of Canada",
     "LUN.TO": "Lundin Mining",
     "HBM.TO": "Hudbay Minerals",
     "IVN.TO": "Ivanhoe Mines",
@@ -534,8 +533,8 @@ if "filter_rsi" not in st.session_state:
     st.session_state.filter_rsi = (0.0, 100.0)
 if "filter_sma" not in st.session_state:
     st.session_state.filter_sma = "All Trends"
-if "filter_search" not in st.session_state:
-    st.session_state.filter_search = ""
+if "filter_search_select" not in st.session_state:
+    st.session_state.filter_search_select = "-- All Assets (No Filter) --"
 
 def set_signal_filter(signal_name):
     if signal_name == "ALL":
@@ -547,7 +546,7 @@ def reset_all_filters():
     st.session_state.filter_signals = DEFAULT_ACTIVE_SIGNALS.copy()
     st.session_state.filter_rsi = (0.0, 100.0)
     st.session_state.filter_sma = "All Trends"
-    st.session_state.filter_search = ""
+    st.session_state.filter_search_select = "-- All Assets (No Filter) --"
 
 # -----------------------------------------------------------------------------
 # TSX Market Session Hours Helper
@@ -1271,7 +1270,7 @@ def render_dashboard():
 
         st.markdown("---")
 
-        # Autocomplete Dropdown Search with Hints (Typing AC shows AC.TO — Air Canada)
+        # Autocomplete Dropdown Search (Issue 1 Resolved: Removed secondary form)
         st.markdown("**📊 Open Market Data Details**")
         all_catalog_syms = sorted(list(set(list(EXTENDED_CATALOG.keys()) + st.session_state.custom_watchlist_symbols)))
         searchable_options = ["-- Type symbol or company name --"] + [
@@ -1288,19 +1287,6 @@ def render_dashboard():
             target_sym = selected_stock_label.split(" — ")[0].strip()
             st.query_params["ticker"] = target_sym
             st.rerun()
-
-        # Custom Direct Lookup (for any untracked or US ticker)
-        with st.form("custom_lookup_form", clear_on_submit=True):
-            user_typed_ticker = st.text_input(
-                "Or search any custom ticker:",
-                placeholder="e.g. AQN, BB, AAPL",
-                help="Type any symbol and hit Enter to view its live TradingView chart and technicals."
-            )
-            lookup_submitted = st.form_submit_button("Search & Open ➔", use_container_width=True)
-            if lookup_submitted and user_typed_ticker.strip():
-                clean_sym, _ = sanitize_and_resolve_ticker(user_typed_ticker)
-                st.query_params["ticker"] = clean_sym
-                st.rerun()
 
         st.markdown("---")
         st.subheader("🔍 Screener Filters")
@@ -1330,11 +1316,27 @@ def render_dashboard():
             key="filter_sma",
         )
 
-        search_query = st.text_input(
+        # Autocomplete Table Search with Dynamic Hints (Issue 2 Resolved)
+        st.markdown("**Filter Watchlist Table**")
+        
+        # Build options dynamically from all active tickers currently in the screener
+        active_table_symbols = sorted(list(set(df_raw["Symbol"].dropna().unique()))) if not df_raw.empty else []
+        table_filter_options = ["-- All Assets (No Filter) --"] + [
+            f"{s} — {sanitize_and_resolve_ticker(s)[1]}" for s in active_table_symbols
+        ]
+
+        # Ensure selected index stays valid across dynamic changes
+        current_sel = st.session_state.filter_search_select
+        sel_idx = table_filter_options.index(current_sel) if current_sel in table_filter_options else 0
+
+        selected_table_filter = st.selectbox(
             "Filter Watchlist Table",
-            placeholder="e.g. SHOP, BMO, Enbridge",
-            key="filter_search",
-        ).strip().upper()
+            options=table_filter_options,
+            index=sel_idx,
+            help="Type any ticker or company name to quickly filter the table.",
+            label_visibility="collapsed",
+            key="filter_search_select"
+        )
 
         st.markdown("---")
         st.caption("ℹ️ **Educational / Non-Financial Advice Disclaimer**")
@@ -1412,17 +1414,16 @@ def render_dashboard():
     elif sma_trend == "Bearish / Death Cross (SMA 50 < SMA 200)":
         filtered_df = filtered_df[filtered_df["SMA_50"] < filtered_df["SMA_200"]]
 
-    if search_query:
-        filtered_df = filtered_df[
-            filtered_df["Symbol"].str.contains(search_query, case=False, na=False)
-            | filtered_df["Company"].str.contains(search_query, case=False, na=False)
-        ]
+    # Filter by selected autocomplete symbol (if chosen)
+    if selected_table_filter != "-- All Assets (No Filter) --":
+        filter_target_sym = selected_table_filter.split(" — ")[0].strip()
+        filtered_df = filtered_df[filtered_df["Symbol"] == filter_target_sym]
 
     has_active_filters = (
         set(selected_signals) != set(available_signals)
         or rsi_range != (0.0, 100.0)
         or sma_trend != "All Trends"
-        or bool(search_query)
+        or selected_table_filter != "-- All Assets (No Filter) --"
     )
 
     # 3. Interactive Embedded Metric Cards (4 Columns)
