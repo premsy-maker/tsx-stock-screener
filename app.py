@@ -50,7 +50,7 @@ st.set_page_config(
 )
 
 # -----------------------------------------------------------------------------
-# Wealthsimple Minimalist Clean Light Theme
+# Wealthsimple Minimalist Clean Light Theme Tokens & CSS Injection
 # -----------------------------------------------------------------------------
 bg_main = "#f8fafc"
 bg_card = "#ffffff"
@@ -103,7 +103,7 @@ st.markdown(
         color: {text_sub} !important;
     }}
 
-    /* Inputs, Select Boxes, & Popovers */
+    /* Inputs, Select Boxes, & Dropdowns */
     div[data-baseweb="input"], div[data-baseweb="select"], div[data-baseweb="select"] > div {{
         background-color: {input_bg} !important;
         border: 1px solid {border_col} !important;
@@ -287,7 +287,7 @@ st.markdown(
     }}
     button[data-testid="stTab"] p {{
         color: #475569 !important;
-        font-weight: 600 !important;
+        font-weight: 700 !important;
         font-size: 0.96rem !important;
     }}
     button[data-testid="stTab"][aria-selected="true"] {{
@@ -745,7 +745,6 @@ def render_tradingview_area_chart(df_hist: pd.DataFrame, is_positive: bool = Tru
 
     json_points = json.dumps(chart_points)
     
-    # Wealthsimple-grade light theme palette
     line_col = "#16a34a" if is_positive else "#dc2626"
     top_col = "rgba(22, 163, 74, 0.22)" if is_positive else "rgba(220, 38, 38, 0.22)"
     bottom_col = "rgba(255, 255, 255, 0.0)"
@@ -918,7 +917,7 @@ def render_market_data_page(ticker: str):
     chart_tabs = st.radio(
         "Time Horizon",
         ["1M", "3M", "6M", "1Y", "5Y"],
-        index=3,  # Default to 1Y
+        index=3,
         horizontal=True,
         label_visibility="collapsed"
     )
