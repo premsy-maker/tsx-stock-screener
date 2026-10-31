@@ -50,19 +50,19 @@ st.set_page_config(
 )
 
 # -----------------------------------------------------------------------------
-# Static Dark Theme Tokens & CSS Injection (Wealthsimple Style Tokens)
+# Wealthsimple Minimalist Light Theme Tokens & CSS Injection
 # -----------------------------------------------------------------------------
-bg_main = "#0b1120"
-bg_card = "#131d33"
-bg_card_hover = "#1e293b"
-bg_sidebar = "#060911"
-border_col = "#1f2937"
-text_title = "#f9fafb"
-text_sub = "#9ca3af"
-input_bg = "#1f2937"
-input_text = "#f9fafb"
-plotly_tpl = "plotly_dark"
-active_tab_color = "#38bdf8"
+bg_main = "#f8fafc"
+bg_card = "#ffffff"
+bg_card_hover = "#f1f5f9"
+bg_sidebar = "#ffffff"
+border_col = "#e2e8f0"
+text_title = "#0f172a"
+text_sub = "#64748b"
+input_bg = "#ffffff"
+input_text = "#0f172a"
+plotly_tpl = "plotly_white"
+active_tab_color = "#0284c7"
 
 st.markdown(
     f"""
@@ -73,7 +73,7 @@ st.markdown(
         color: {text_title} !important;
     }}
     header[data-testid="stHeader"] {{
-        background-color: {bg_main} !important;
+        background-color: #ffffff !important;
         border-bottom: 1px solid {border_col} !important;
     }}
     header[data-testid="stHeader"] * {{
@@ -113,14 +113,15 @@ st.markdown(
         background-color: transparent !important;
     }}
 
-    /* Multiselect Tags (Blue Badge) */
+    /* Multiselect Tags */
     span[data-baseweb="tag"] {{
-        background-color: #0284c7 !important;
-        color: #ffffff !important;
+        background-color: #e0f2fe !important;
+        color: #0369a1 !important;
         border-radius: 6px !important;
+        font-weight: 600 !important;
     }}
     span[data-baseweb="tag"] * {{
-        color: #ffffff !important;
+        color: #0369a1 !important;
     }}
 
     /* Metric Cards */
@@ -133,7 +134,7 @@ st.markdown(
         display: flex !important;
         flex-direction: column !important;
         justify-content: center !important;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.15) !important;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04) !important;
     }}
     div[data-testid="stMetricLabel"] * {{
         color: {text_sub} !important;
@@ -157,6 +158,7 @@ st.markdown(
         border-radius: 8px;
         color: {text_sub} !important;
         font-size: 0.85rem;
+        box-shadow: 0 1px 2px rgba(0,0,0,0.03);
     }}
 
     /* Interactive Embedded KPI Filter Cards */
@@ -174,12 +176,13 @@ st.markdown(
         min-height: 86px !important;
         transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
         color: {text_title} !important;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.04) !important;
     }}
     div.kpi-card-container button:hover {{
         border-color: #0284c7 !important;
         background-color: {bg_card_hover} !important;
         transform: translateY(-2px);
-        box-shadow: 0 4px 14px rgba(2, 132, 199, 0.18) !important;
+        box-shadow: 0 4px 14px rgba(2, 132, 199, 0.12) !important;
     }}
     div.kpi-card-container button p {{
         color: {text_title} !important;
@@ -192,10 +195,10 @@ st.markdown(
         border-radius: 12px;
         padding: 20px 24px;
         margin-bottom: 20px;
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
     }}
     .ws-stat-tile {{
-        background-color: rgba(15, 23, 42, 0.65);
+        background-color: #f8fafc;
         border: 1px solid {border_col};
         border-radius: 10px;
         padding: 12px 16px;
@@ -230,15 +233,15 @@ st.markdown(
         margin-left: 6px;
     }}
     .ws-badge-green {{
-        background-color: rgba(34, 197, 94, 0.18);
-        color: #4ade80;
+        background-color: rgba(34, 197, 94, 0.12);
+        color: #16a34a;
     }}
     .ws-meta-pill {{
-        background-color: rgba(15, 23, 42, 0.75);
+        background-color: #f1f5f9;
         border: 1px solid {border_col};
         border-radius: 8px;
         padding: 6px 12px;
-        color: #94a3b8;
+        color: #475569;
         font-size: 0.86rem;
         display: inline-flex;
         align-items: center;
@@ -283,21 +286,36 @@ st.markdown(
         color: {text_title} !important;
     }}
 
+    /* Expanders */
+    div[data-testid="stExpander"] {{
+        background-color: {bg_card} !important;
+        border: 1px solid {border_col} !important;
+        border-radius: 10px !important;
+    }}
+    div[data-testid="stExpander"] summary,
+    div[data-testid="stExpander"] div[role="region"] {{
+        background-color: {bg_card} !important;
+        color: {text_title} !important;
+    }}
+    div[data-testid="stExpander"] * {{
+        color: {text_title} !important;
+    }}
+
     /* Modern Table Hint Pill */
     .tn-table-hint {{
         display: inline-flex;
         align-items: center;
         gap: 8px;
-        background-color: rgba(30, 41, 59, 0.6);
+        background-color: #f1f5f9;
         border: 1px solid {border_col};
         padding: 6px 14px;
         border-radius: 20px;
         font-size: 0.85rem;
-        color: #94a3b8;
+        color: #475569;
         margin-bottom: 12px;
     }}
     .tn-table-hint b {{
-        color: #38bdf8;
+        color: #0284c7;
     }}
 
     /* Dataframe Theming & Selection Column Concealment */
@@ -306,6 +324,7 @@ st.markdown(
         border: 1px solid {border_col} !important;
         border-radius: 12px !important;
         overflow: hidden !important;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04) !important;
     }}
 
     /* Hide the radio/checkbox column rendered by on_select="rerun" on the watchlist */
@@ -470,7 +489,6 @@ def load_screener_results():
     mod_time = None
     fetch_error = None
 
-    # 1. Primary: Attempt fetch from Supabase Cloud Database
     supabase_url = st.secrets.get("SUPABASE_URL") or os.environ.get("SUPABASE_URL")
     supabase_key = st.secrets.get("SUPABASE_KEY") or os.environ.get("SUPABASE_KEY")
 
@@ -518,7 +536,6 @@ def load_screener_results():
         except Exception as e:
             fetch_error = f"Supabase: {e}"
 
-    # 2. Secondary: Fallback to GitHub Data Branch if Supabase returned no rows
     if df is None or df.empty:
         bust_url = f"{DATA_BRANCH_URL}?t={int(time.time())}"
         headers = {
@@ -540,7 +557,6 @@ def load_screener_results():
         except Exception as e:
             fetch_error = f"Remote URL: {e}"
 
-    # 3. Tertiary: Local CSV File Fallback
     if (df is None or df.empty) and os.path.exists(LOCAL_CSV_FILE):
         try:
             raw_mtime = os.path.getmtime(LOCAL_CSV_FILE)
@@ -576,7 +592,7 @@ def load_screener_results():
         return pd.DataFrame(), None
 
 # -----------------------------------------------------------------------------
-# Fundamental & Wealthsimple-Style Market Data Fetcher
+# Fundamental & Market Data Fetcher
 # -----------------------------------------------------------------------------
 @st.cache_data(ttl=1800)
 def fetch_stock_market_details(ticker: str):
@@ -672,17 +688,14 @@ def fetch_stock_chart_history(ticker: str, period: str = "1y", interval: str = "
         return pd.DataFrame()
 
 # -----------------------------------------------------------------------------
-# TradingView Lightweight Interactive Financial Chart Component
+# TradingView Lightweight Interactive Financial Chart (Light Mode)
 # -----------------------------------------------------------------------------
 def render_tradingview_area_chart(df_hist: pd.DataFrame, is_positive: bool = True):
     if df_hist.empty or "Close" not in df_hist.columns:
         st.info("Chart data currently unavailable for this timeframe.")
         return
 
-    # Extract date column
     date_col = "Date" if "Date" in df_hist.columns else df_hist.columns[0]
-    
-    # Sort and strictly deduplicate dates
     df_sorted = df_hist.copy().sort_values(by=date_col)
     
     chart_points = []
@@ -706,10 +719,10 @@ def render_tradingview_area_chart(df_hist: pd.DataFrame, is_positive: bool = Tru
 
     json_points = json.dumps(chart_points)
     
-    # Wealthsimple-grade theme palette
-    line_col = "#22c55e" if is_positive else "#ef4444"
-    top_col = "rgba(34, 197, 94, 0.28)" if is_positive else "rgba(239, 68, 68, 0.28)"
-    bottom_col = "rgba(34, 197, 94, 0.00)" if is_positive else "rgba(239, 68, 68, 0.00)"
+    # Wealthsimple-grade light theme palette
+    line_col = "#16a34a" if is_positive else "#dc2626"
+    top_col = "rgba(22, 163, 74, 0.22)" if is_positive else "rgba(220, 38, 38, 0.22)"
+    bottom_col = "rgba(255, 255, 255, 0.0)"
 
     tv_html = f"""
     <!DOCTYPE html>
@@ -723,7 +736,7 @@ def render_tradingview_area_chart(df_hist: pd.DataFrame, is_positive: bool = Tru
                 padding: 0;
                 width: 100%;
                 height: 100%;
-                background-color: {bg_main};
+                background-color: #ffffff;
                 overflow: hidden;
                 font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
             }}
@@ -744,37 +757,37 @@ def render_tradingview_area_chart(df_hist: pd.DataFrame, is_positive: bool = Tru
                 const chart = LightweightCharts.createChart(container, {{
                     autoSize: true,
                     layout: {{
-                        background: {{ color: '{bg_main}' }},
-                        textColor: '#94a3b8',
+                        background: {{ color: '#ffffff' }},
+                        textColor: '#64748b',
                         fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
                     }},
                     grid: {{
                         vertLines: {{ visible: false }},
-                        horzLines: {{ color: '#1e293b' }},
+                        horzLines: {{ color: '#f1f5f9' }},
                     }},
                     crosshair: {{
                         vertLine: {{
-                            color: '#64748b',
+                            color: '#94a3b8',
                             width: 1,
                             style: LightweightCharts.LineStyle.Dotted,
-                            labelBackgroundColor: '#1e293b',
+                            labelBackgroundColor: '#0f172a',
                         }},
                         horzLine: {{
-                            color: '#64748b',
+                            color: '#94a3b8',
                             width: 1,
                             style: LightweightCharts.LineStyle.Dotted,
-                            labelBackgroundColor: '#1e293b',
+                            labelBackgroundColor: '#0f172a',
                         }},
                     }},
                     rightPriceScale: {{
-                        borderColor: '#1e293b',
+                        borderColor: '#e2e8f0',
                         scaleMargins: {{
                             top: 0.12,
                             bottom: 0.08,
                         }},
                     }},
                     timeScale: {{
-                        borderColor: '#1e293b',
+                        borderColor: '#e2e8f0',
                         timeVisible: true,
                         secondsVisible: false,
                     }},
@@ -809,10 +822,9 @@ def render_tradingview_area_chart(df_hist: pd.DataFrame, is_positive: bool = Tru
     components.html(tv_html, height=320)
 
 # -----------------------------------------------------------------------------
-# Wealthsimple-Style Market Details Page (Step 4 Refined)
+# Wealthsimple-Style Market Details Page (Light Theme)
 # -----------------------------------------------------------------------------
 def render_market_data_page(ticker: str):
-    # Generous top clearance so the back button is completely visible below Streamlit toolbar
     st.markdown("<div style='margin-top: 25px;'></div>", unsafe_allow_html=True)
 
     # 1. Top Navigation Bar: Back Button & Stock Switcher
@@ -848,10 +860,10 @@ def render_market_data_page(ticker: str):
     st.markdown(
         f"""
         <div style="margin-bottom: 12px;">
-            <div style="font-size: 2.4rem; font-weight: 800; color: #f9fafb; letter-spacing: -0.5px; line-height: 1.1;">
+            <div style="font-size: 2.4rem; font-weight: 800; color: #0f172a; letter-spacing: -0.5px; line-height: 1.1;">
                 {d['symbol']}
             </div>
-            <div style="font-size: 1.15rem; font-weight: 500; color: #94a3b8; margin-top: 4px;">
+            <div style="font-size: 1.15rem; font-weight: 500; color: #64748b; margin-top: 4px;">
                 {d['shortName']}
             </div>
         </div>
@@ -861,13 +873,13 @@ def render_market_data_page(ticker: str):
 
     # 3. Live Price & Session Change Badge
     is_positive = d['priceDiff'] >= 0
-    color_change = "#22c55e" if is_positive else "#ef4444"
+    color_change = "#16a34a" if is_positive else "#dc2626"
     plus_sign = "+" if is_positive else ""
     st.markdown(
         f"""
         <div style="margin-bottom: 16px;">
-            <span style="font-size: 2.2rem; font-weight: 800; color: #f9fafb;">${d['currentPrice']:.2f}</span>
-            <span style="font-size: 1.05rem; color: #94a3b8; font-weight: 600; margin-left: 6px;">CAD</span>
+            <span style="font-size: 2.2rem; font-weight: 800; color: #0f172a;">${d['currentPrice']:.2f}</span>
+            <span style="font-size: 1.05rem; color: #64748b; font-weight: 600; margin-left: 6px;">CAD</span>
             <div style="color: {color_change}; font-size: 1.1rem; font-weight: 700; margin-top: 4px;">
                 {plus_sign}${d['priceDiff']:.2f} ({plus_sign}{d['pctDiff']:.2f}%) at close
             </div>
@@ -952,7 +964,7 @@ def render_market_data_page(ticker: str):
                 <div style="display: flex; flex-direction: column; gap: 14px;">
                     <div class="ws-stat-tile">
                         <div class="ws-metric-label">Annual Dividend Yield {div_badge}</div>
-                        <div class="ws-metric-val" style="color: #38bdf8;">{d['divYield']}</div>
+                        <div class="ws-metric-val" style="color: #0284c7;">{d['divYield']}</div>
                     </div>
                     <div class="ws-stat-tile">
                         <div class="ws-metric-label">Distribution Frequency</div>
@@ -997,11 +1009,11 @@ def render_market_data_page(ticker: str):
     st.markdown(
         f"""
         <div class="ws-card">
-            <p style="color: #cbd5e1; font-size: 0.96rem; line-height: 1.7; margin-bottom: 22px;">
+            <p style="color: #334155; font-size: 0.96rem; line-height: 1.7; margin-bottom: 22px;">
                 {d['summary']}
             </p>
-            <div style="display: flex; flex-wrap: wrap; gap: 12px; padding-top: 16px; border-top: 1px solid #1f2937;">
-                {"<a href='" + d['website'] + "' target='_blank' style='text-decoration:none;'><div class='ws-meta-pill' style='border-color:#0284c7; color:#38bdf8;'>🔗 <b>Official Website</b></div></a>" if d['website'] else ""}
+            <div style="display: flex; flex-wrap: wrap; gap: 12px; padding-top: 16px; border-top: 1px solid #e2e8f0;">
+                {"<a href='" + d['website'] + "' target='_blank' style='text-decoration:none;'><div class='ws-meta-pill' style='border-color:#0284c7; color:#0284c7;'>🔗 <b>Official Website</b></div></a>" if d['website'] else ""}
                 <div class="ws-meta-pill">📍 Country: <b>{d['country']}</b></div>
                 <div class="ws-meta-pill">🏢 Sector/Industry: <b>{d['industry']}</b></div>
                 <div class="ws-meta-pill">👥 Employees: <b>{d['employees']}</b></div>
@@ -1053,7 +1065,6 @@ def is_exact_duplicate(existing_list, candidate):
 # Main Application Dashboard
 # -----------------------------------------------------------------------------
 def render_dashboard():
-    # Check if a ticker is selected in the URL parameters
     active_ticker = st.query_params.get("ticker")
     if active_ticker:
         render_market_data_page(active_ticker)
@@ -1078,7 +1089,6 @@ def render_dashboard():
 
         st.markdown("---")
 
-        # Quick Jump to Market Data Details
         all_symbols = sorted(list(COMPANY_NAMES.keys()))
         selected_stock_detail = st.selectbox(
             "📊 Open Market Data Details",
@@ -1159,12 +1169,10 @@ def render_dashboard():
         st.warning("Waiting for scan data... Run the GitHub Actions workflow or execute `python ScreenStocksV1.py` locally.")
         return
 
-    # Counts across whole universe
     buy_all_cnt = len(df_raw[df_raw["Signal"] == "BUY / ACCUMULATE"])
     sell_all_cnt = len(df_raw[df_raw["Signal"] == "SELL / EXIT"])
     trim_all_cnt = len(df_raw[df_raw["Signal"] == "TRIM / TAKE PROFIT"])
 
-    # Watchlist Filtering Calculations
     filtered_df = df_raw.copy()
     if selected_signals:
         filtered_df = filtered_df[filtered_df["Signal"].isin(selected_signals)]
@@ -1250,7 +1258,7 @@ def render_dashboard():
     )
 
     # -------------------------------------------------------------------------
-    # TAB 1: Filtered Watchlist (Polished Step 3 Implementation)
+    # TAB 1: Filtered Watchlist (Light Minimalist)
     # -------------------------------------------------------------------------
     with tab_data:
         col_tab_info, col_clear = st.columns([7.5, 2.5])
@@ -1263,14 +1271,13 @@ def render_dashboard():
         else:
             def signal_styler(val):
                 if "BUY" in str(val):
-                    return "color: #4ade80; background-color: rgba(34, 197, 94, 0.20); font-weight: 700; border-radius: 4px;"
+                    return "color: #15803d; background-color: rgba(34, 197, 94, 0.14); font-weight: 700; border-radius: 4px;"
                 elif "SELL" in str(val):
-                    return "color: #f87171; background-color: rgba(239, 68, 68, 0.20); font-weight: 700; border-radius: 4px;"
+                    return "color: #b91c1c; background-color: rgba(239, 68, 68, 0.14); font-weight: 700; border-radius: 4px;"
                 elif "TRIM" in str(val):
-                    return "color: #fbbf24; background-color: rgba(245, 158, 11, 0.20); font-weight: 700; border-radius: 4px;"
-                return "color: #9ca3af;"
+                    return "color: #b45309; background-color: rgba(245, 158, 11, 0.14); font-weight: 700; border-radius: 4px;"
+                return "color: #64748b;"
 
-            # Prepare Rich Asset column: combines symbol with company title and chart badge
             display_df = filtered_df.copy()
             display_df["Asset"] = display_df.apply(
                 lambda r: f"{r['Symbol']}  •  {r['Company']} 📊" if pd.notna(r.get("Company")) and r["Company"] != "—" else f"{r['Symbol']} 📊",
@@ -1293,13 +1300,11 @@ def render_dashboard():
                 .map(signal_styler, subset=["Signal"])
             )
 
-            # Elegant fintech prompt
             st.markdown(
                 '<div class="tn-table-hint">💡 <b>Click any row</b> to open its TradingView interactive charts, valuation metrics, and technical profile.</div>',
                 unsafe_allow_html=True
             )
 
-            # High-fidelity table configuration
             event = st.dataframe(
                 styled_df,
                 column_config={
@@ -1344,7 +1349,6 @@ def render_dashboard():
                 key="watchlist_table_selection",
             )
 
-            # Row click detection with seamless in-tab routing
             if hasattr(event, "selection") and event.selection and event.selection.rows:
                 selected_row_idx = event.selection.rows[0]
                 clicked_symbol = filtered_df.iloc[selected_row_idx]["Symbol"]
@@ -1651,16 +1655,22 @@ def render_dashboard():
                     nbins=18,
                     color="Signal",
                     color_discrete_map={
-                        "BUY / ACCUMULATE": "#22c55e",
-                        "SELL / EXIT": "#ef4444",
-                        "TRIM / TAKE PROFIT": "#f59e0b",
-                        "KEEP / HOLD": "#64748b",
+                        "BUY / ACCUMULATE": "#16a34a",
+                        "SELL / EXIT": "#dc2626",
+                        "TRIM / TAKE PROFIT": "#d97706",
+                        "KEEP / HOLD": "#94a3b8",
                     },
                     template=plotly_tpl,
                 )
-                fig_rsi.add_vline(x=40, line_dash="dot", line_color="#22c55e", annotation_text="Pullback (<=40)")
-                fig_rsi.add_vline(x=75, line_dash="dot", line_color="#ef4444", annotation_text="Overbought (>=75)")
-                fig_rsi.update_layout(xaxis_title="14-Day RSI", yaxis_title="Equities Count", height=420)
+                fig_rsi.add_vline(x=40, line_dash="dot", line_color="#16a34a", annotation_text="Pullback (<=40)")
+                fig_rsi.add_vline(x=75, line_dash="dot", line_color="#dc2626", annotation_text="Overbought (>=75)")
+                fig_rsi.update_layout(
+                    paper_bgcolor="#ffffff",
+                    plot_bgcolor="#ffffff",
+                    xaxis_title="14-Day RSI",
+                    yaxis_title="Equities Count",
+                    height=420
+                )
                 st.plotly_chart(fig_rsi, use_container_width=True)
 
             with chart_col2:
@@ -1674,14 +1684,20 @@ def render_dashboard():
                     hover_data=hover_fields,
                     color="Signal",
                     color_discrete_map={
-                        "BUY / ACCUMULATE": "#22c55e",
-                        "SELL / EXIT": "#ef4444",
-                        "TRIM / TAKE PROFIT": "#f59e0b",
-                        "KEEP / HOLD": "#64748b",
+                        "BUY / ACCUMULATE": "#16a34a",
+                        "SELL / EXIT": "#dc2626",
+                        "TRIM / TAKE PROFIT": "#d97706",
+                        "KEEP / HOLD": "#94a3b8",
                     },
                     template=plotly_tpl,
                 )
-                fig_scatter.update_layout(xaxis_title="50-Day SMA (CAD)", yaxis_title="Current Price (CAD)", height=420)
+                fig_scatter.update_layout(
+                    paper_bgcolor="#ffffff",
+                    plot_bgcolor="#ffffff",
+                    xaxis_title="50-Day SMA (CAD)",
+                    yaxis_title="Current Price (CAD)",
+                    height=420
+                )
                 st.plotly_chart(fig_scatter, use_container_width=True)
 
     # -------------------------------------------------------------------------
