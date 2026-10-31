@@ -1614,25 +1614,79 @@ def render_dashboard():
                 icon="ℹ️"
             )
 
-        with st.expander("➕ Log Single or Multiple Positions (Any TSX / US Symbol)", expanded=False):
-            st.write("**Option A: Add Any Symbol On Demand**")
-            col_cust1, col_cust2, col_cust3, col_cust4, col_cust5 = st.columns(5)
-            with col_cust1:
-                custom_sym_input = st.text_input("Ticker Symbol", placeholder="e.g. AC, AQN, AAPL").strip().upper()
-            with col_cust2:
-                custom_date = st.date_input("Entry Date", value=date.today(), key="custom_entry_date")
-            with col_cust3:
-                custom_price = st.number_input("Purchase Price", min_value=0.01, value=10.0, step=0.5, key="custom_entry_price")
-            with col_cust4:
-                custom_shares = st.number_input("Share Count", min_value=1, value=10, step=1, key="custom_entry_shares")
-            with col_cust5:
-                custom_gain = st.number_input("Target Gain ($/sh)", min_value=0.1, value=5.0, step=0.5, key="custom_entry_gain")
+        with st.expander("➕ Add Position to Pocket Trader", expanded=False):
+            # 1. Build unified catalog directory (known stocks + active custom watchlist)
+            all_known = sorted(list(set(list(EXTENDED_CATALOG.keys()) + list(df_raw["Symbol"].dropna().unique()) + st.session_state.custom_watchlist_symbols)))
+            catalog_options = ["-- Select or Type Any Symbol --"] + [
+                f"{s} — {sanitize_and_resolve_ticker(s)[1]}" for s in all_known
+            ]
 
-            if st.button("➕ Add Custom Position to Tracker", type="primary"):
-                if custom_sym_input:
-                    resolved_sym, _ = sanitize_and_resolve_ticker(custom_sym_input)
+            col_sym, col_dt = st.columns([3, 2])
+            with col_sym:
+                chosen_pick = st.selectbox(
+                    "Select Asset from Catalog",
+                    options=catalog_options,
+                    index=0,
+                    help="Start typing a symbol (e.g. AC, SHOP, AQN) or company name."
+                )
+            with col_dt:
+                custom_date = st.date_input("Entry Date", value=date.today(), key="unified_entry_date")
+
+            # Extract selected symbol or allow custom override
+            selected_sym = ""
+            if chosen_pick != "-- Select or Type Any Symbol --":
+                selected_sym = chosen_pick.split(" — ")[0].strip()
+
+            raw_input_sym = st.text_input(
+                "Or enter custom ticker symbol if not listed above:",
+                value=selected_sym,
+                placeholder="e.g. AQN.TO, CSU.TO, AAPL"
+            ).strip().upper()
+
+            # Determine default purchase price dynamically from screener data or on-demand fetch
+            default_p = 10.00
+            final_sym = ""
+            if raw_input_sym:
+                final_sym, comp_name = sanitize_and_resolve_ticker(raw_input_sym)
+                if not df_raw.empty:
+                    m = df_raw[df_raw["Symbol"] == final_sym]
+                    if not m.empty and pd.notna(m["Price"].iloc[0]):
+                        default_p = float(m["Price"].iloc[0])
+                if default_p == 10.00:
+                    t_data = calculate_on_demand_technicals(final_sym)
+                    if t_data and t_data.get("price"):
+                        default_p = float(t_data["price"])
+
+            col_p, col_sh, col_tg = st.columns(3)
+            with col_p:
+                custom_price = st.number_input(
+                    "Purchase Price (CAD)",
+                    min_value=0.01,
+                    value=round(default_p, 2),
+                    step=0.5,
+                    key="unified_entry_price"
+                )
+            with col_sh:
+                custom_shares = st.number_input(
+                    "Shares Count",
+                    min_value=1,
+                    value=10,
+                    step=1,
+                    key="unified_entry_shares"
+                )
+            with col_tg:
+                custom_gain = st.number_input(
+                    "Target Gain ($/sh)",
+                    min_value=0.1,
+                    value=5.0,
+                    step=0.5,
+                    key="unified_entry_gain"
+                )
+
+            if st.button("➕ Add Position to Pocket Trader", type="primary", use_container_width=True):
+                if final_sym:
                     cand = {
-                        "Symbol": resolved_sym,
+                        "Symbol": final_sym,
                         "Buy Date": str(custom_date),
                         "Buy Price": float(custom_price),
                         "Shares": int(custom_shares),
@@ -1641,74 +1695,12 @@ def render_dashboard():
                     if not is_exact_duplicate(st.session_state.pocket_positions, cand):
                         st.session_state.pocket_positions.append(cand)
                         sync_pocket_to_storage()
-                        st.success(f"Added {resolved_sym} to your Pocket Trader!")
+                        st.toast(f"✅ Added {final_sym} to your Pocket Trader!")
                         st.rerun()
                     else:
                         st.warning("This exact position is already logged.")
                 else:
-                    st.error("Please enter a valid ticker symbol.")
-
-            st.markdown("---")
-            st.write("**Option B: Batch Select from Catalog**")
-            all_known = sorted(list(set(list(EXTENDED_CATALOG.keys()) + list(df_raw["Symbol"].dropna().unique()) + st.session_state.custom_watchlist_symbols)))
-            chosen_symbols = st.multiselect(
-                "Choose Symbol(s) to add to your tracker:",
-                options=all_known,
-                default=[],
-                help="Pick one or multiple symbols. An editable staging table will appear below.",
-            )
-
-            if chosen_symbols:
-                st.caption("Adjust entry details below before adding to your portfolio:")
-                staging_rows = []
-                for sym in chosen_symbols:
-                    cur_price = 0.0
-                    if not df_raw.empty:
-                        m = df_raw[df_raw["Symbol"] == sym]
-                        if not m.empty:
-                            cur_price = float(m["Price"].iloc[0])
-
-                    _, comp_name = sanitize_and_resolve_ticker(sym)
-                    staging_rows.append({
-                        "Symbol": sym,
-                        "Company": comp_name,
-                        "Buy Date": str(date.today()),
-                        "Buy Price": round(cur_price, 2),
-                        "Shares": 10,
-                        "Target Gain ($)": 10.00,
-                    })
-
-                staging_df = pd.DataFrame(staging_rows)
-                edited_staging = st.data_editor(
-                    staging_df,
-                    use_container_width=True,
-                    num_rows="dynamic",
-                    key="pocket_staging_editor",
-                )
-
-                if st.button("➕ Add All Batch Positions", type="secondary"):
-                    added_count = 0
-                    dup_count = 0
-                    for _, r in edited_staging.iterrows():
-                        cand = {
-                            "Symbol": str(r["Symbol"]).strip().upper(),
-                            "Buy Date": str(r["Buy Date"]),
-                            "Buy Price": float(r["Buy Price"]),
-                            "Shares": int(r["Shares"]),
-                            "Target Gain": float(r["Target Gain ($)"]),
-                        }
-                        if not is_exact_duplicate(st.session_state.pocket_positions, cand):
-                            st.session_state.pocket_positions.append(cand)
-                            added_count += 1
-                        else:
-                            dup_count += 1
-
-                    sync_pocket_to_storage()
-                    if dup_count > 0:
-                        st.warning(f"Added {added_count} position(s). Skipped {dup_count} duplicate(s).")
-                    else:
-                        st.success(f"Added {added_count} position(s) to Pocket Trader!")
-                    st.rerun()
+                    st.error("Please select or enter a valid ticker symbol.")
 
         if not st.session_state.pocket_positions:
             st.info("No active positions tracked in Pocket Trader yet. Add any TSX/US stock using the form above or upload a CSV below.")
@@ -1917,7 +1909,6 @@ def render_dashboard():
                             st.error(f"Error parsing CSV: {err}")
                     else:
                         st.caption(f"ℹ️ `{uploaded_backup.name}` is already synchronized.")
-
     # -------------------------------------------------------------------------
     # TAB 3: Market Technicals
     # -------------------------------------------------------------------------
