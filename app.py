@@ -437,7 +437,7 @@ BASE_COMPANY_NAMES = {
     "K.TO": "Kinross Gold",
 }
 
-# Extended Lookup Catalog (for Autocomplete suggestions: AC, AQN, etc.)
+# Extended Catalog for Instant Search Suggestions
 EXTENDED_CATALOG = {
     **BASE_COMPANY_NAMES,
     "AC.TO": "Air Canada",
@@ -988,7 +988,7 @@ def render_market_data_page(ticker: str):
     clean_sym, company_name = sanitize_and_resolve_ticker(ticker)
     st.markdown("<div style='margin-top: 25px;'></div>", unsafe_allow_html=True)
 
-    # 1. Top Navigation Bar: Back Button, Dynamic Add Button, & Autocomplete Switcher
+    # 1. Top Navigation Bar: Back Button, Dynamic Add/Remove Button, & Autocomplete Switcher
     col_back, col_add_watch, col_switch = st.columns([2.5, 3.5, 4.0])
     with col_back:
         if st.button("⬅️ Back to Watchlist", use_container_width=True, type="primary"):
@@ -996,20 +996,31 @@ def render_market_data_page(ticker: str):
             st.rerun()
 
     with col_add_watch:
-        # Check active status: Is it in baseline 59 or already added?
+        # Check active status: Is it in baseline 59 or in user custom watchlist?
         is_in_baseline = clean_sym in BASE_COMPANY_NAMES
         is_in_custom = clean_sym in st.session_state.custom_watchlist_symbols
 
-        if not is_in_baseline and not is_in_custom:
+        if is_in_custom:
+            # Allow user to REMOVE custom tracked ticker
+            if st.button(f"🗑️ Remove {clean_sym} from Watchlist", use_container_width=True, type="secondary"):
+                st.session_state.custom_watchlist_symbols = [
+                    s for s in st.session_state.custom_watchlist_symbols if s != clean_sym
+                ]
+                st.toast(f"Removed {clean_sym} from monitored watchlist.")
+                st.query_params.clear()
+                st.rerun()
+        elif not is_in_baseline:
+            # Allow user to ADD untracked ticker
             if st.button(f"➕ Add {clean_sym} to Watchlist", use_container_width=True, type="secondary"):
-                st.session_state.custom_watchlist_symbols.append(clean_sym)
+                if clean_sym not in st.session_state.custom_watchlist_symbols:
+                    st.session_state.custom_watchlist_symbols.append(clean_sym)
                 st.toast(f"✅ Added {clean_sym} to your active watchlist!")
                 st.rerun()
         else:
-            st.button(f"✓ {clean_sym} is Actively Monitored", disabled=True, use_container_width=True)
+            # Baseline asset
+            st.button(f"✓ Core TSX Baseline Asset", disabled=True, use_container_width=True)
 
     with col_switch:
-        # Fuzzy searchable selectbox
         all_catalog_syms = sorted(list(set(list(EXTENDED_CATALOG.keys()) + st.session_state.custom_watchlist_symbols)))
         searchable_list = [f"{s} — {sanitize_and_resolve_ticker(s)[1]}" for s in all_catalog_syms]
         curr_label = f"{clean_sym} — {company_name}"
@@ -1253,6 +1264,30 @@ def render_dashboard():
 
     df_raw, scan_time = load_screener_results()
 
+    # CRITICAL: Inject custom monitored tickers IMMEDIATELY so sidebar filters,
+    # counts, and table data stay strictly in sync
+    if not df_raw.empty and st.session_state.custom_watchlist_symbols:
+        new_rows = []
+        existing_syms = set(df_raw["Symbol"].dropna().unique())
+        for cust_sym in st.session_state.custom_watchlist_symbols:
+            if cust_sym not in existing_syms:
+                t_data = calculate_on_demand_technicals(cust_sym)
+                if t_data:
+                    _, company_name = sanitize_and_resolve_ticker(cust_sym)
+                    new_rows.append({
+                        "Symbol": cust_sym,
+                        "Company": company_name,
+                        "Price": t_data["price"],
+                        "Signal": t_data["signal"],
+                        "RSI_14": t_data["rsi_14"],
+                        "SMA_50": t_data["sma_50"],
+                        "SMA_200": t_data["sma_200"],
+                        "SMA_Trend": "Bullish" if t_data["sma_50"] > t_data["sma_200"] else "Bearish",
+                        "Rationale": t_data["rationale"]
+                    })
+        if new_rows:
+            df_raw = pd.concat([df_raw, pd.DataFrame(new_rows)], ignore_index=True)
+
     # 1. Sidebar Header, Autocomplete Lookup & Filters
     with st.sidebar:
         st.markdown(
@@ -1270,7 +1305,7 @@ def render_dashboard():
 
         st.markdown("---")
 
-        # Autocomplete Dropdown Search (Issue 1 Resolved: Removed secondary form)
+        # Top Autocomplete Dropdown Search (Detail Market View)
         st.markdown("**📊 Open Market Data Details**")
         all_catalog_syms = sorted(list(set(list(EXTENDED_CATALOG.keys()) + st.session_state.custom_watchlist_symbols)))
         searchable_options = ["-- Type symbol or company name --"] + [
@@ -1316,16 +1351,13 @@ def render_dashboard():
             key="filter_sma",
         )
 
-        # Autocomplete Table Search with Dynamic Hints (Issue 2 Resolved)
+        # Autocomplete Table Search with Dynamic Hints (Includes custom added tickers!)
         st.markdown("**Filter Watchlist Table**")
-        
-        # Build options dynamically from all active tickers currently in the screener
         active_table_symbols = sorted(list(set(df_raw["Symbol"].dropna().unique()))) if not df_raw.empty else []
         table_filter_options = ["-- All Assets (No Filter) --"] + [
             f"{s} — {sanitize_and_resolve_ticker(s)[1]}" for s in active_table_symbols
         ]
 
-        # Ensure selected index stays valid across dynamic changes
         current_sel = st.session_state.filter_search_select
         sel_idx = table_filter_options.index(current_sel) if current_sel in table_filter_options else 0
 
@@ -1333,7 +1365,7 @@ def render_dashboard():
             "Filter Watchlist Table",
             options=table_filter_options,
             index=sel_idx,
-            help="Type any ticker or company name to quickly filter the table.",
+            help="Type any ticker or company name to filter the table.",
             label_visibility="collapsed",
             key="filter_search_select"
         )
@@ -1341,29 +1373,6 @@ def render_dashboard():
         st.markdown("---")
         st.caption("ℹ️ **Educational / Non-Financial Advice Disclaimer**")
         st.caption("TrendNorth is an algorithmic research platform for TSX securities. All indicators and alerts are mathematical representations for self-directed screening and do not constitute financial advice.")
-
-    # Inject any custom symbols the user clicked "➕ Add <ticker> to Watchlist" on
-    if not df_raw.empty and st.session_state.custom_watchlist_symbols:
-        new_rows = []
-        existing_syms = set(df_raw["Symbol"].dropna().unique())
-        for cust_sym in st.session_state.custom_watchlist_symbols:
-            if cust_sym not in existing_syms:
-                t_data = calculate_on_demand_technicals(cust_sym)
-                if t_data:
-                    _, company_name = sanitize_and_resolve_ticker(cust_sym)
-                    new_rows.append({
-                        "Symbol": cust_sym,
-                        "Company": company_name,
-                        "Price": t_data["price"],
-                        "Signal": t_data["signal"],
-                        "RSI_14": t_data["rsi_14"],
-                        "SMA_50": t_data["sma_50"],
-                        "SMA_200": t_data["sma_200"],
-                        "SMA_Trend": "Bullish" if t_data["sma_50"] > t_data["sma_200"] else "Bearish",
-                        "Rationale": t_data["rationale"]
-                    })
-        if new_rows:
-            df_raw = pd.concat([df_raw, pd.DataFrame(new_rows)], ignore_index=True)
 
     # 2. Main Title & Session Clock Header
     status_label, status_detail, elapsed_time, time_to_close = get_tsx_market_status()
@@ -1414,7 +1423,7 @@ def render_dashboard():
     elif sma_trend == "Bearish / Death Cross (SMA 50 < SMA 200)":
         filtered_df = filtered_df[filtered_df["SMA_50"] < filtered_df["SMA_200"]]
 
-    # Filter by selected autocomplete symbol (if chosen)
+    # Filter by selected autocomplete symbol
     if selected_table_filter != "-- All Assets (No Filter) --":
         filter_target_sym = selected_table_filter.split(" — ")[0].strip()
         filtered_df = filtered_df[filtered_df["Symbol"] == filter_target_sym]
