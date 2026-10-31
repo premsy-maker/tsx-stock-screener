@@ -522,10 +522,13 @@ def sanitize_and_resolve_ticker(raw_sym: str) -> tuple[str, str]:
     return sym, sym
 
 # -----------------------------------------------------------------------------
-# User-Added Custom Watchlist State
+# Watchlist Membership State (Custom Adds & Removals)
 # -----------------------------------------------------------------------------
 if "custom_watchlist_symbols" not in st.session_state:
     st.session_state.custom_watchlist_symbols = []
+
+if "removed_watchlist_symbols" not in st.session_state:
+    st.session_state.removed_watchlist_symbols = []
 
 if "filter_signals" not in st.session_state:
     st.session_state.filter_signals = DEFAULT_ACTIVE_SIGNALS.copy()
@@ -988,7 +991,7 @@ def render_market_data_page(ticker: str):
     clean_sym, company_name = sanitize_and_resolve_ticker(ticker)
     st.markdown("<div style='margin-top: 25px;'></div>", unsafe_allow_html=True)
 
-    # 1. Top Navigation Bar: Back Button, Dynamic Add/Remove Button, & Autocomplete Switcher
+    # 1. Top Navigation Bar: Back Button, Dynamic Add/Remove Watchlist Button, & Autocomplete Switcher
     col_back, col_add_watch, col_switch = st.columns([2.5, 3.5, 4.0])
     with col_back:
         if st.button("⬅️ Back to Watchlist", use_container_width=True, type="primary"):
@@ -996,29 +999,27 @@ def render_market_data_page(ticker: str):
             st.rerun()
 
     with col_add_watch:
-        # Check active status: Is it in baseline 59 or in user custom watchlist?
-        is_in_baseline = clean_sym in BASE_COMPANY_NAMES
+        # Determine whether this ticker is actively monitored
         is_in_custom = clean_sym in st.session_state.custom_watchlist_symbols
+        is_in_removed = clean_sym in st.session_state.removed_watchlist_symbols
+        is_monitored = is_in_custom or (clean_sym in BASE_COMPANY_NAMES and not is_in_removed)
 
-        if is_in_custom:
-            # Allow user to REMOVE custom tracked ticker
+        if is_monitored:
             if st.button(f"🗑️ Remove {clean_sym} from Watchlist", use_container_width=True, type="secondary"):
-                st.session_state.custom_watchlist_symbols = [
-                    s for s in st.session_state.custom_watchlist_symbols if s != clean_sym
-                ]
-                st.toast(f"Removed {clean_sym} from monitored watchlist.")
-                st.query_params.clear()
-                st.rerun()
-        elif not is_in_baseline:
-            # Allow user to ADD untracked ticker
-            if st.button(f"➕ Add {clean_sym} to Watchlist", use_container_width=True, type="secondary"):
-                if clean_sym not in st.session_state.custom_watchlist_symbols:
-                    st.session_state.custom_watchlist_symbols.append(clean_sym)
-                st.toast(f"✅ Added {clean_sym} to your active watchlist!")
+                if clean_sym in st.session_state.custom_watchlist_symbols:
+                    st.session_state.custom_watchlist_symbols.remove(clean_sym)
+                if clean_sym not in st.session_state.removed_watchlist_symbols:
+                    st.session_state.removed_watchlist_symbols.append(clean_sym)
+                st.toast(f"Removed {clean_sym} from Watchlist.")
                 st.rerun()
         else:
-            # Baseline asset
-            st.button(f"✓ Core TSX Baseline Asset", disabled=True, use_container_width=True)
+            if st.button(f"➕ Add {clean_sym} to Watchlist", use_container_width=True, type="primary"):
+                if clean_sym in st.session_state.removed_watchlist_symbols:
+                    st.session_state.removed_watchlist_symbols.remove(clean_sym)
+                if clean_sym not in st.session_state.custom_watchlist_symbols and clean_sym not in BASE_COMPANY_NAMES:
+                    st.session_state.custom_watchlist_symbols.append(clean_sym)
+                st.toast(f"✅ Added {clean_sym} to Watchlist!")
+                st.rerun()
 
     with col_switch:
         all_catalog_syms = sorted(list(set(list(EXTENDED_CATALOG.keys()) + st.session_state.custom_watchlist_symbols)))
@@ -1264,13 +1265,16 @@ def render_dashboard():
 
     df_raw, scan_time = load_screener_results()
 
-    # CRITICAL: Inject custom monitored tickers IMMEDIATELY so sidebar filters,
-    # counts, and table data stay strictly in sync
+    # 1. Exclude symbols the user explicitly removed
+    if not df_raw.empty and st.session_state.removed_watchlist_symbols:
+        df_raw = df_raw[~df_raw["Symbol"].isin(st.session_state.removed_watchlist_symbols)].reset_index(drop=True)
+
+    # 2. Inject custom monitored tickers immediately so sidebar filters, counts, and tables stay synchronized
     if not df_raw.empty and st.session_state.custom_watchlist_symbols:
         new_rows = []
         existing_syms = set(df_raw["Symbol"].dropna().unique())
         for cust_sym in st.session_state.custom_watchlist_symbols:
-            if cust_sym not in existing_syms:
+            if cust_sym not in existing_syms and cust_sym not in st.session_state.removed_watchlist_symbols:
                 t_data = calculate_on_demand_technicals(cust_sym)
                 if t_data:
                     _, company_name = sanitize_and_resolve_ticker(cust_sym)
@@ -1288,7 +1292,7 @@ def render_dashboard():
         if new_rows:
             df_raw = pd.concat([df_raw, pd.DataFrame(new_rows)], ignore_index=True)
 
-    # 1. Sidebar Header, Autocomplete Lookup & Filters
+    # 3. Sidebar Header, Autocomplete Lookup & Filters
     with st.sidebar:
         st.markdown(
             f"""
@@ -1351,7 +1355,7 @@ def render_dashboard():
             key="filter_sma",
         )
 
-        # Autocomplete Table Search with Dynamic Hints (Includes custom added tickers!)
+        # Autocomplete Table Search with Dynamic Hints
         st.markdown("**Filter Watchlist Table**")
         active_table_symbols = sorted(list(set(df_raw["Symbol"].dropna().unique()))) if not df_raw.empty else []
         table_filter_options = ["-- All Assets (No Filter) --"] + [
@@ -1374,7 +1378,7 @@ def render_dashboard():
         st.caption("ℹ️ **Educational / Non-Financial Advice Disclaimer**")
         st.caption("TrendNorth is an algorithmic research platform for TSX securities. All indicators and alerts are mathematical representations for self-directed screening and do not constitute financial advice.")
 
-    # 2. Main Title & Session Clock Header
+    # 4. Main Title & Session Clock Header
     status_label, status_detail, elapsed_time, time_to_close = get_tsx_market_status()
     scan_date_str = scan_time.strftime("%b %d, %Y — %I:%M %p ET") if scan_time else "Data Pending"
     today_et_str = datetime.now(ET_ZONE).strftime("%A, %B %d, %Y")
@@ -1435,7 +1439,7 @@ def render_dashboard():
         or selected_table_filter != "-- All Assets (No Filter) --"
     )
 
-    # 3. Interactive Embedded Metric Cards (4 Columns)
+    # 5. Interactive Embedded Metric Cards (4 Columns)
     m_col1, m_col2, m_col3, m_col4 = st.columns(4)
 
     with m_col1:
@@ -1488,7 +1492,7 @@ def render_dashboard():
 
     st.markdown("<div style='margin-top: 14px;'></div>", unsafe_allow_html=True)
 
-    # 4. Main Content Tabs
+    # 6. Main Content Tabs
     tab_data, tab_pocket, tab_charts, tab_manual = st.tabs(
         ["📋 Filtered Watchlist", "💼 Pocket Trader", "📊 Market Technicals", "📖 User Manual"]
     )
@@ -1615,7 +1619,6 @@ def render_dashboard():
             )
 
         with st.expander("➕ Add Position to Pocket Trader", expanded=False):
-            # 1. Build unified catalog directory (known stocks + active custom watchlist)
             all_known = sorted(list(set(list(EXTENDED_CATALOG.keys()) + list(df_raw["Symbol"].dropna().unique()) + st.session_state.custom_watchlist_symbols)))
             catalog_options = ["-- Select or Type Any Symbol --"] + [
                 f"{s} — {sanitize_and_resolve_ticker(s)[1]}" for s in all_known
@@ -1632,7 +1635,6 @@ def render_dashboard():
             with col_dt:
                 custom_date = st.date_input("Entry Date", value=date.today(), key="unified_entry_date")
 
-            # Extract selected symbol or allow custom override
             selected_sym = ""
             if chosen_pick != "-- Select or Type Any Symbol --":
                 selected_sym = chosen_pick.split(" — ")[0].strip()
@@ -1643,7 +1645,6 @@ def render_dashboard():
                 placeholder="e.g. AQN.TO, CSU.TO, AAPL"
             ).strip().upper()
 
-            # Determine default purchase price dynamically from screener data or on-demand fetch
             default_p = 10.00
             final_sym = ""
             if raw_input_sym:
@@ -1909,6 +1910,7 @@ def render_dashboard():
                             st.error(f"Error parsing CSV: {err}")
                     else:
                         st.caption(f"ℹ️ `{uploaded_backup.name}` is already synchronized.")
+
     # -------------------------------------------------------------------------
     # TAB 3: Market Technicals
     # -------------------------------------------------------------------------
