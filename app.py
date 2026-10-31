@@ -262,6 +262,13 @@ st.markdown(
         border-radius: 8px !important;
     }}
 
+    /* Hide the default selection checkbox/radio column in the watchlist table */
+    div[data-testid="stDataFrame"] div[role="columnheader"]:first-child,
+    div[data-testid="stDataFrame"] div[role="row"] > div[role="gridcell"]:first-child:has(input[type="checkbox"]),
+    div[data-testid="stDataFrame"] div[role="row"] > div[role="gridcell"]:first-child:has(input[type="radio"]) {{
+        display: none !important;
+    }}
+
     /* Floating Feedback Popover */
     div[data-testid="stPopover"] {{
         position: fixed;
@@ -1073,10 +1080,12 @@ def render_dashboard():
                     return "color: #fbbf24; background-color: rgba(245, 158, 11, 0.20); font-weight: 700; border-radius: 4px;"
                 return "color: #9ca3af;"
 
-            # Prepare columns without any LinkColumn (prevents target="_blank" tab multiplication)
+            # Visual Market Data indicator column without target="_blank"
             display_df = filtered_df.copy()
+            display_df.insert(0, "Market Data", "View 📊")
+
             columns_order = [
-                "Symbol", "Company", "Price", "Signal", "RSI_14", "SMA_50", "SMA_200", "Rationale"
+                "Market Data", "Symbol", "Company", "Price", "Signal", "RSI_14", "SMA_50", "SMA_200", "Rationale"
             ]
             display_cols = [c for c in columns_order if c in display_df.columns]
 
@@ -1091,11 +1100,20 @@ def render_dashboard():
                 .map(signal_styler, subset=["Signal"])
             )
 
-            st.caption("💡 **Tip:** Click on any stock row to open its live Market Details.")
+            st.caption("💡 **Tip:** Click on **View 📊** or any stock row to open full live Market Fundamentals & Charts.")
 
-            # Single-row selection triggers instant in-tab navigation
+            # Row click selection locks navigation strictly inside the SAME tab
             event = st.dataframe(
                 styled_df,
+                column_config={
+                    "Market Data": st.column_config.TextColumn(
+                        "Market Data",
+                        help="Click to open Wealthsimple-style fundamentals and charts",
+                        width="small",
+                    ),
+                    "Symbol": st.column_config.TextColumn("Symbol", width="small"),
+                    "Company": st.column_config.TextColumn("Company", width="medium"),
+                },
                 use_container_width=True,
                 hide_index=True,
                 on_select="rerun",
@@ -1103,7 +1121,7 @@ def render_dashboard():
                 key="watchlist_table_selection",
             )
 
-            # Detect clicked row and navigate within the EXACT SAME tab
+            # Detect row click and navigate in the SAME tab
             if hasattr(event, "selection") and event.selection and event.selection.rows:
                 selected_row_idx = event.selection.rows[0]
                 clicked_symbol = filtered_df.iloc[selected_row_idx]["Symbol"]
