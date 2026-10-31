@@ -185,26 +185,67 @@ st.markdown(
         color: {text_title} !important;
     }}
 
-    /* Wealthsimple Detail Cards */
+    /* Wealthsimple Detail & Metric Cards */
     .ws-card {{
         background-color: {bg_card};
         border: 1px solid {border_col};
         border-radius: 12px;
-        padding: 18px 22px;
-        margin-bottom: 16px;
+        padding: 20px 24px;
+        margin-bottom: 20px;
         box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    }}
+    .ws-stat-tile {{
+        background-color: rgba(15, 23, 42, 0.65);
+        border: 1px solid {border_col};
+        border-radius: 10px;
+        padding: 12px 16px;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        transition: border-color 0.15s ease;
+    }}
+    .ws-stat-tile:hover {{
+        border-color: #38bdf8;
     }}
     .ws-metric-label {{
         color: {text_sub};
-        font-size: 0.82rem;
-        font-weight: 500;
-        margin-bottom: 2px;
+        font-size: 0.78rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        margin-bottom: 4px;
     }}
     .ws-metric-val {{
         color: {text_title};
-        font-size: 1.05rem;
+        font-size: 1.15rem;
+        font-weight: 800;
+        font-variant-numeric: tabular-nums;
+    }}
+    .ws-badge {{
+        display: inline-block;
+        padding: 2px 8px;
+        border-radius: 4px;
+        font-size: 0.76rem;
         font-weight: 700;
-        margin-bottom: 12px;
+        margin-left: 6px;
+    }}
+    .ws-badge-green {{
+        background-color: rgba(34, 197, 94, 0.18);
+        color: #4ade80;
+    }}
+    .ws-meta-pill {{
+        background-color: rgba(15, 23, 42, 0.75);
+        border: 1px solid {border_col};
+        border-radius: 8px;
+        padding: 6px 12px;
+        color: #94a3b8;
+        font-size: 0.86rem;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+    }}
+    .ws-meta-pill b {{
+        color: {text_title};
     }}
 
     /* Secondary & Primary Buttons */
@@ -239,21 +280,6 @@ st.markdown(
         font-weight: 700 !important;
     }}
     button[data-testid="stTab"]:hover p {{
-        color: {text_title} !important;
-    }}
-
-    /* Expanders */
-    div[data-testid="stExpander"] {{
-        background-color: {bg_card} !important;
-        border: 1px solid {border_col} !important;
-        border-radius: 10px !important;
-    }}
-    div[data-testid="stExpander"] summary,
-    div[data-testid="stExpander"] div[role="region"] {{
-        background-color: {bg_card} !important;
-        color: {text_title} !important;
-    }}
-    div[data-testid="stExpander"] * {{
         color: {text_title} !important;
     }}
 
@@ -617,6 +643,7 @@ def fetch_stock_market_details(ticker: str):
             "avgVolume": f"{info.get('averageVolume', 0):,}" if info.get('averageVolume') else "N/A",
             "exchange": info.get("exchange", "TSX"),
             "divYield": div_yield_str,
+            "divYieldVal": div_yield_val or 0.0,
             "divFrequency": "Quarterly" if div_yield_val else "None",
             "exDivDate": ex_div_str,
             "marketCap": mcap_str,
@@ -782,7 +809,7 @@ def render_tradingview_area_chart(df_hist: pd.DataFrame, is_positive: bool = Tru
     components.html(tv_html, height=320)
 
 # -----------------------------------------------------------------------------
-# Wealthsimple-Style Market Details Page
+# Wealthsimple-Style Market Details Page (Step 4 Refined)
 # -----------------------------------------------------------------------------
 def render_market_data_page(ticker: str):
     # Generous top clearance so the back button is completely visible below Streamlit toolbar
@@ -864,36 +891,48 @@ def render_market_data_page(ticker: str):
     # Render TradingView Interactive Area Chart
     render_tradingview_area_chart(hist_data, is_positive=is_positive)
 
-    st.markdown("---")
+    st.markdown("<div style='margin-top: 24px;'></div>", unsafe_allow_html=True)
 
-    # 5. Market Details Section
-    st.subheader("Market details")
+    # 5. Key Statistics (Wealthsimple 3x3 Card Grid)
+    st.markdown("### Key Statistics")
     st.markdown(
         f"""
         <div class="ws-card">
-            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 18px;">
-                <div>
-                    <div class="ws-metric-label">Open</div>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px;">
+                <div class="ws-stat-tile">
+                    <div class="ws-metric-label">Open Price</div>
                     <div class="ws-metric-val">{d['open']}</div>
-                    <div class="ws-metric-label">High</div>
+                </div>
+                <div class="ws-stat-tile">
+                    <div class="ws-metric-label">Day High</div>
                     <div class="ws-metric-val">{d['high']}</div>
-                    <div class="ws-metric-label">52 week high</div>
+                </div>
+                <div class="ws-stat-tile">
+                    <div class="ws-metric-label">Day Low</div>
+                    <div class="ws-metric-val">{d['low']}</div>
+                </div>
+                <div class="ws-stat-tile">
+                    <div class="ws-metric-label">52 Week High</div>
                     <div class="ws-metric-val">{d['week52High']}</div>
                 </div>
-                <div>
-                    <div class="ws-metric-label">Low</div>
-                    <div class="ws-metric-val">{d['low']}</div>
-                    <div class="ws-metric-label">52 week low</div>
+                <div class="ws-stat-tile">
+                    <div class="ws-metric-label">52 Week Low</div>
                     <div class="ws-metric-val">{d['week52Low']}</div>
-                    <div class="ws-metric-label">Exchange</div>
+                </div>
+                <div class="ws-stat-tile">
+                    <div class="ws-metric-label">Trading Volume</div>
+                    <div class="ws-metric-val">{d['volume']}</div>
+                </div>
+                <div class="ws-stat-tile">
+                    <div class="ws-metric-label">Average Volume (3M)</div>
+                    <div class="ws-metric-val">{d['avgVolume']}</div>
+                </div>
+                <div class="ws-stat-tile">
+                    <div class="ws-metric-label">Primary Exchange</div>
                     <div class="ws-metric-val">{d['exchange']}</div>
                 </div>
-                <div>
-                    <div class="ws-metric-label">Volume</div>
-                    <div class="ws-metric-val">{d['volume']}</div>
-                    <div class="ws-metric-label">Average volume</div>
-                    <div class="ws-metric-val">{d['avgVolume']}</div>
-                    <div class="ws-metric-label">Asset Class</div>
+                <div class="ws-stat-tile">
+                    <div class="ws-metric-label">Asset Classification</div>
                     <div class="ws-metric-val">Equity / TSX</div>
                 </div>
             </div>
@@ -902,54 +941,71 @@ def render_market_data_page(ticker: str):
         unsafe_allow_html=True
     )
 
-    # 6. Dividends & Financials Sections (Two Columns)
+    # 6. Dividends & Financials Sections (Two High-Contrast Column Cards)
     col_div, col_fin = st.columns(2)
     with col_div:
-        st.subheader("Dividends")
+        st.markdown("### Dividends")
+        div_badge = f'<span class="ws-badge ws-badge-green">Yield Active</span>' if d['divYieldVal'] > 0 else ''
         st.markdown(
             f"""
             <div class="ws-card">
-                <div class="ws-metric-label">Frequency</div>
-                <div class="ws-metric-val">{d['divFrequency']}</div>
-                <div class="ws-metric-label">Dividend yield</div>
-                <div class="ws-metric-val">{d['divYield']}</div>
-                <div class="ws-metric-label">Ex-dividend date</div>
-                <div class="ws-metric-val">{d['exDivDate']}</div>
+                <div style="display: flex; flex-direction: column; gap: 14px;">
+                    <div class="ws-stat-tile">
+                        <div class="ws-metric-label">Annual Dividend Yield {div_badge}</div>
+                        <div class="ws-metric-val" style="color: #38bdf8;">{d['divYield']}</div>
+                    </div>
+                    <div class="ws-stat-tile">
+                        <div class="ws-metric-label">Distribution Frequency</div>
+                        <div class="ws-metric-val">{d['divFrequency']}</div>
+                    </div>
+                    <div class="ws-stat-tile">
+                        <div class="ws-metric-label">Ex-Dividend Date</div>
+                        <div class="ws-metric-val">{d['exDivDate']}</div>
+                    </div>
+                </div>
             </div>
             """,
             unsafe_allow_html=True
         )
 
     with col_fin:
-        st.subheader("Financials")
+        st.markdown("### Valuation & Financials")
         st.markdown(
             f"""
             <div class="ws-card">
-                <div class="ws-metric-label">Market cap</div>
-                <div class="ws-metric-val">{d['marketCap']}</div>
-                <div class="ws-metric-label">Shares outstanding</div>
-                <div class="ws-metric-val">{d['sharesOut']}</div>
-                <div class="ws-metric-label">P/E ratio</div>
-                <div class="ws-metric-val">{d['peRatio']}</div>
+                <div style="display: flex; flex-direction: column; gap: 14px;">
+                    <div class="ws-stat-tile">
+                        <div class="ws-metric-label">Total Market Capitalization</div>
+                        <div class="ws-metric-val">{d['marketCap']}</div>
+                    </div>
+                    <div class="ws-stat-tile">
+                        <div class="ws-metric-label">Shares Outstanding</div>
+                        <div class="ws-metric-val">{d['sharesOut']}</div>
+                    </div>
+                    <div class="ws-stat-tile">
+                        <div class="ws-metric-label">Price to Earnings (P/E Ratio)</div>
+                        <div class="ws-metric-val">{d['peRatio']}</div>
+                    </div>
+                </div>
             </div>
             """,
             unsafe_allow_html=True
         )
 
     # 7. About Company Profile
-    st.subheader(f"About {d['symbol']}")
+    st.markdown(f"### About {d['symbol']}")
     st.markdown(
         f"""
         <div class="ws-card">
-            <p style="color: #cbd5e1; font-size: 0.96rem; line-height: 1.6; margin-bottom: 20px;">
+            <p style="color: #cbd5e1; font-size: 0.96rem; line-height: 1.7; margin-bottom: 22px;">
                 {d['summary']}
             </p>
-            <div style="display: flex; flex-wrap: wrap; gap: 24px; padding-top: 14px; border-top: 1px solid #1f2937; color: #94a3b8; font-size: 0.90rem;">
-                {"<div>🔗 <a href='" + d['website'] + "' target='_blank' style='color:#38bdf8; text-decoration:none; font-weight:600;'>Company website</a></div>" if d['website'] else ""}
-                <div>📍 <b>Country:</b> {d['country']}</div>
-                <div>👥 <b>Employees:</b> {d['employees']}</div>
-                <div>🏢 <b>Industry:</b> {d['industry']}</div>
-                <div>👤 <b>Key Executive:</b> {d['officer']}</div>
+            <div style="display: flex; flex-wrap: wrap; gap: 12px; padding-top: 16px; border-top: 1px solid #1f2937;">
+                {"<a href='" + d['website'] + "' target='_blank' style='text-decoration:none;'><div class='ws-meta-pill' style='border-color:#0284c7; color:#38bdf8;'>🔗 <b>Official Website</b></div></a>" if d['website'] else ""}
+                <div class="ws-meta-pill">📍 Country: <b>{d['country']}</b></div>
+                <div class="ws-meta-pill">🏢 Sector/Industry: <b>{d['industry']}</b></div>
+                <div class="ws-meta-pill">👥 Employees: <b>{d['employees']}</b></div>
+                <div class="ws-meta-pill">👤 Key Executive: <b>{d['officer']}</b></div>
             </div>
         </div>
         """,
