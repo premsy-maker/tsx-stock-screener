@@ -522,10 +522,46 @@ def sanitize_and_resolve_ticker(raw_sym: str) -> tuple[str, str]:
     return sym, sym
 
 # -----------------------------------------------------------------------------
+# Supabase Custom Watchlist Synchronization Helpers
+# -----------------------------------------------------------------------------
+def db_add_custom_symbol(symbol: str, company: str):
+    supabase_url = st.secrets.get("SUPABASE_URL") or os.environ.get("SUPABASE_URL")
+    supabase_key = st.secrets.get("SUPABASE_KEY") or os.environ.get("SUPABASE_KEY")
+    if supabase_url and supabase_key and create_client is not None:
+        try:
+            client: Client = create_client(supabase_url, supabase_key)
+            client.table("custom_watchlist").upsert({"symbol": symbol, "company": company}).execute()
+        except Exception as e:
+            st.warning(f"Note: Could not sync {symbol} to cloud DB: {e}")
+
+def db_remove_custom_symbol(symbol: str):
+    supabase_url = st.secrets.get("SUPABASE_URL") or os.environ.get("SUPABASE_URL")
+    supabase_key = st.secrets.get("SUPABASE_KEY") or os.environ.get("SUPABASE_KEY")
+    if supabase_url and supabase_key and create_client is not None:
+        try:
+            client: Client = create_client(supabase_url, supabase_key)
+            client.table("custom_watchlist").delete().eq("symbol", symbol).execute()
+        except Exception as e:
+            st.warning(f"Note: Could not remove {symbol} from cloud DB: {e}")
+
+def db_load_custom_watchlist() -> list[str]:
+    supabase_url = st.secrets.get("SUPABASE_URL") or os.environ.get("SUPABASE_URL")
+    supabase_key = st.secrets.get("SUPABASE_KEY") or os.environ.get("SUPABASE_KEY")
+    if supabase_url and supabase_key and create_client is not None:
+        try:
+            client: Client = create_client(supabase_url, supabase_key)
+            res = client.table("custom_watchlist").select("symbol").execute()
+            if res.data:
+                return [row["symbol"] for row in res.data]
+        except Exception:
+            pass
+    return []
+
+# -----------------------------------------------------------------------------
 # Watchlist Membership State (Custom Adds & Removals)
 # -----------------------------------------------------------------------------
 if "custom_watchlist_symbols" not in st.session_state:
-    st.session_state.custom_watchlist_symbols = []
+    st.session_state.custom_watchlist_symbols = db_load_custom_watchlist()
 
 if "removed_watchlist_symbols" not in st.session_state:
     st.session_state.removed_watchlist_symbols = []
@@ -1010,6 +1046,8 @@ def render_market_data_page(ticker: str):
                     st.session_state.custom_watchlist_symbols.remove(clean_sym)
                 if clean_sym not in st.session_state.removed_watchlist_symbols:
                     st.session_state.removed_watchlist_symbols.append(clean_sym)
+                # Sync deletion to Supabase
+                db_remove_custom_symbol(clean_sym)
                 st.toast(f"Removed {clean_sym} from Watchlist.")
                 st.rerun()
         else:
@@ -1018,6 +1056,8 @@ def render_market_data_page(ticker: str):
                     st.session_state.removed_watchlist_symbols.remove(clean_sym)
                 if clean_sym not in st.session_state.custom_watchlist_symbols and clean_sym not in BASE_COMPANY_NAMES:
                     st.session_state.custom_watchlist_symbols.append(clean_sym)
+                # Sync addition to Supabase
+                db_add_custom_symbol(clean_sym, company_name)
                 st.toast(f"✅ Added {clean_sym} to Watchlist!")
                 st.rerun()
 
