@@ -10,6 +10,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 import requests
 import streamlit as st
+import streamlit.components.v1 as components
 import yfinance as yf
 
 # Supabase Client Import
@@ -49,7 +50,7 @@ st.set_page_config(
 )
 
 # -----------------------------------------------------------------------------
-# Static Dark Theme Tokens & CSS Injection
+# Static Dark Theme Tokens & CSS Injection (Wealthsimple Style Tokens)
 # -----------------------------------------------------------------------------
 bg_main = "#0b1120"
 bg_card = "#131d33"
@@ -105,7 +106,7 @@ st.markdown(
     div[data-baseweb="input"], div[data-baseweb="select"] {{
         background-color: {input_bg} !important;
         border: 1px solid {border_col} !important;
-        border-radius: 6px !important;
+        border-radius: 8px !important;
     }}
     div[data-baseweb="input"] input, div[data-baseweb="select"] * {{
         color: {input_text} !important;
@@ -116,7 +117,7 @@ st.markdown(
     span[data-baseweb="tag"] {{
         background-color: #0284c7 !important;
         color: #ffffff !important;
-        border-radius: 4px !important;
+        border-radius: 6px !important;
     }}
     span[data-baseweb="tag"] * {{
         color: #ffffff !important;
@@ -126,13 +127,13 @@ st.markdown(
     div[data-testid="stMetric"] {{
         background-color: {bg_card} !important;
         border: 1px solid {border_col} !important;
-        border-radius: 10px !important;
-        padding: 12px 16px !important;
+        border-radius: 12px !important;
+        padding: 14px 18px !important;
         min-height: 86px !important;
         display: flex !important;
         flex-direction: column !important;
         justify-content: center !important;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.02) !important;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.15) !important;
     }}
     div[data-testid="stMetricLabel"] * {{
         color: {text_sub} !important;
@@ -152,8 +153,8 @@ st.markdown(
     .tn-meta-bar span {{
         background: {bg_card} !important;
         border: 1px solid {border_col} !important;
-        padding: 4px 10px;
-        border-radius: 6px;
+        padding: 5px 12px;
+        border-radius: 8px;
         color: {text_sub} !important;
         font-size: 0.85rem;
     }}
@@ -163,7 +164,7 @@ st.markdown(
         width: 100% !important;
         background-color: {bg_card} !important;
         border: 1px solid {border_col} !important;
-        border-radius: 10px !important;
+        border-radius: 12px !important;
         padding: 12px 14px !important;
         text-align: left !important;
         white-space: pre-line !important;
@@ -171,14 +172,14 @@ st.markdown(
         font-size: 0.95rem !important;
         font-weight: 700 !important;
         min-height: 86px !important;
-        transition: all 0.15s ease-in-out !important;
+        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
         color: {text_title} !important;
     }}
     div.kpi-card-container button:hover {{
         border-color: #0284c7 !important;
         background-color: {bg_card_hover} !important;
-        transform: translateY(-1px);
-        box-shadow: 0 4px 10px rgba(2, 132, 199, 0.12) !important;
+        transform: translateY(-2px);
+        box-shadow: 0 4px 14px rgba(2, 132, 199, 0.18) !important;
     }}
     div.kpi-card-container button p {{
         color: {text_title} !important;
@@ -188,9 +189,10 @@ st.markdown(
     .ws-card {{
         background-color: {bg_card};
         border: 1px solid {border_col};
-        border-radius: 10px;
-        padding: 16px 20px;
+        border-radius: 12px;
+        padding: 18px 22px;
         margin-bottom: 16px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
     }}
     .ws-metric-label {{
         color: {text_sub};
@@ -244,7 +246,7 @@ st.markdown(
     div[data-testid="stExpander"] {{
         background-color: {bg_card} !important;
         border: 1px solid {border_col} !important;
-        border-radius: 8px !important;
+        border-radius: 10px !important;
     }}
     div[data-testid="stExpander"] summary,
     div[data-testid="stExpander"] div[role="region"] {{
@@ -255,14 +257,32 @@ st.markdown(
         color: {text_title} !important;
     }}
 
-    /* Dataframe / Table Overrides */
+    /* Modern Table Hint Pill */
+    .tn-table-hint {{
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        background-color: rgba(30, 41, 59, 0.6);
+        border: 1px solid {border_col};
+        padding: 6px 14px;
+        border-radius: 20px;
+        font-size: 0.85rem;
+        color: #94a3b8;
+        margin-bottom: 12px;
+    }}
+    .tn-table-hint b {{
+        color: #38bdf8;
+    }}
+
+    /* Dataframe Theming & Selection Column Concealment */
     div[data-testid="stDataFrame"] {{
         background-color: {bg_card} !important;
         border: 1px solid {border_col} !important;
-        border-radius: 8px !important;
+        border-radius: 12px !important;
+        overflow: hidden !important;
     }}
 
-    /* Hide the default selection checkbox/radio column in the watchlist table */
+    /* Hide the radio/checkbox column rendered by on_select="rerun" on the watchlist */
     div[data-testid="stDataFrame"] div[role="columnheader"]:first-child,
     div[data-testid="stDataFrame"] div[role="row"] > div[role="gridcell"]:first-child:has(input[type="checkbox"]),
     div[data-testid="stDataFrame"] div[role="row"] > div[role="gridcell"]:first-child:has(input[type="radio"]) {{
@@ -613,7 +633,7 @@ def fetch_stock_market_details(ticker: str):
         return None
 
 @st.cache_data(ttl=900)
-def fetch_stock_chart_history(ticker: str, period: str = "1mo", interval: str = "1d"):
+def fetch_stock_chart_history(ticker: str, period: str = "1y", interval: str = "1d"):
     try:
         t = yf.Ticker(ticker)
         df_hist = t.history(period=period, interval=interval)
@@ -625,10 +645,137 @@ def fetch_stock_chart_history(ticker: str, period: str = "1mo", interval: str = 
         return pd.DataFrame()
 
 # -----------------------------------------------------------------------------
+# TradingView Lightweight Interactive Financial Chart Component
+# -----------------------------------------------------------------------------
+def render_tradingview_area_chart(df_hist: pd.DataFrame, is_positive: bool = True):
+    if df_hist.empty or "Close" not in df_hist.columns:
+        st.info("Chart data currently unavailable for this timeframe.")
+        return
+
+    # Extract date column
+    date_col = "Date" if "Date" in df_hist.columns else df_hist.columns[0]
+    
+    # Prepare clean payload for TradingView Lightweight charts: [{ time: 'YYYY-MM-DD', value: price }]
+    chart_points = []
+    for _, row in df_hist.iterrows():
+        try:
+            d_val = row[date_col]
+            time_str = d_val.strftime("%Y-%m-%d") if hasattr(d_val, "strftime") else str(d_val)[:10]
+            close_p = float(row["Close"])
+            if not pd.isna(close_p):
+                chart_points.append({"time": time_str, "value": round(close_p, 2)})
+        except Exception:
+            continue
+
+    if not chart_points:
+        st.info("Insufficient price points for TradingView chart.")
+        return
+
+    json_points = json.dumps(chart_points)
+    
+    # Wealthsimple-grade theme palette
+    line_col = "#22c55e" if is_positive else "#ef4444"
+    top_col = "rgba(34, 197, 94, 0.32)" if is_positive else "rgba(239, 68, 68, 0.32)"
+    bottom_col = "rgba(34, 197, 94, 0.00)" if is_positive else "rgba(239, 68, 68, 0.00)"
+
+    tv_html = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="utf-8" />
+        <script src="https://unpkg.com/lightweight-charts/dist/lightweight-charts.standalone.production.js"></script>
+        <style>
+            body {{
+                margin: 0;
+                padding: 0;
+                background-color: {bg_main};
+                overflow: hidden;
+                font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            }}
+            #tv_chart_container {{
+                width: 100%;
+                height: 310px;
+                position: relative;
+            }}
+        </style>
+    </head>
+    <body>
+        <div id="tv_chart_container"></div>
+        <script>
+            const container = document.getElementById('tv_chart_container');
+            const chart = LightweightCharts.createChart(container, {{
+                width: container.clientWidth,
+                height: 310,
+                layout: {{
+                    background: {{ color: '{bg_main}' }},
+                    textColor: '#94a3b8',
+                    fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+                }},
+                grid: {{
+                    vertLines: {{ visible: false }},
+                    horzLines: {{ color: '#1e293b' }},
+                }},
+                crosshair: {{
+                    vertLine: {{
+                        color: '#64748b',
+                        width: 1,
+                        style: LightweightCharts.LineStyle.Dotted,
+                        labelBackgroundColor: '#1e293b',
+                    }},
+                    horzLine: {{
+                        color: '#64748b',
+                        width: 1,
+                        style: LightweightCharts.LineStyle.Dotted,
+                        labelBackgroundColor: '#1e293b',
+                    }},
+                }},
+                rightPriceScale: {{
+                    borderColor: '#1e293b',
+                    scaleMargins: {{
+                        top: 0.12,
+                        bottom: 0.08,
+                    }},
+                }},
+                timeScale: {{
+                    borderColor: '#1e293b',
+                    timeVisible: true,
+                    secondsVisible: false,
+                }},
+                handleScroll: false,
+                handleScale: false,
+            }});
+
+            const areaSeries = chart.addAreaSeries({{
+                topColor: '{top_col}',
+                bottomColor: '{bottom_col}',
+                lineColor: '{line_col}',
+                lineWidth: 2.5,
+                priceFormat: {{
+                    type: 'price',
+                    precision: 2,
+                    minMove: 0.01,
+                }},
+            }});
+
+            const data = {json_points};
+            areaSeries.setData(data);
+            chart.timeScale().fitContent();
+
+            // Auto-resize on window resize
+            window.addEventListener('resize', () => {{
+                chart.applyOptions({{ width: container.clientWidth }});
+            }});
+        </script>
+    </body>
+    </html>
+    """
+    components.html(tv_html, height=320)
+
+# -----------------------------------------------------------------------------
 # Wealthsimple-Style Market Details Page
 # -----------------------------------------------------------------------------
 def render_market_data_page(ticker: str):
-    # Generous top clearance so the back button is 100% visible
+    # Generous top clearance so the back button is completely visible below Streamlit toolbar
     st.markdown("<div style='margin-top: 25px;'></div>", unsafe_allow_html=True)
 
     # 1. Top Navigation Bar: Back Button & Stock Switcher
@@ -676,11 +823,12 @@ def render_market_data_page(ticker: str):
     )
 
     # 3. Live Price & Session Change Badge
-    color_change = "#22c55e" if d['priceDiff'] >= 0 else "#ef4444"
-    plus_sign = "+" if d['priceDiff'] >= 0 else ""
+    is_positive = d['priceDiff'] >= 0
+    color_change = "#22c55e" if is_positive else "#ef4444"
+    plus_sign = "+" if is_positive else ""
     st.markdown(
         f"""
-        <div style="margin-bottom: 20px;">
+        <div style="margin-bottom: 16px;">
             <span style="font-size: 2.2rem; font-weight: 800; color: #f9fafb;">${d['currentPrice']:.2f}</span>
             <span style="font-size: 1.05rem; color: #94a3b8; font-weight: 600; margin-left: 6px;">CAD</span>
             <div style="color: {color_change}; font-size: 1.1rem; font-weight: 700; margin-top: 4px;">
@@ -691,7 +839,7 @@ def render_market_data_page(ticker: str):
         unsafe_allow_html=True
     )
 
-    # 4. Historical Price Chart (Wealthsimple Minimal Style)
+    # 4. Interactive Time Horizon Pill Toggles
     chart_tabs = st.radio(
         "Time Horizon",
         ["1M", "3M", "6M", "1Y", "5Y"],
@@ -703,32 +851,8 @@ def render_market_data_page(ticker: str):
     period_map = {"1M": "1mo", "3M": "3mo", "6M": "6mo", "1Y": "1y", "5Y": "5y"}
     hist_data = fetch_stock_chart_history(ticker, period=period_map.get(chart_tabs, "1y"), interval="1d")
 
-    if not hist_data.empty:
-        fig_price = go.Figure()
-        line_color = "#22c55e" if d['priceDiff'] >= 0 else "#ef4444"
-        fill_color = "rgba(34, 197, 94, 0.12)" if d['priceDiff'] >= 0 else "rgba(239, 68, 68, 0.12)"
-
-        date_col = "Date" if "Date" in hist_data.columns else hist_data.columns[0]
-        fig_price.add_trace(go.Scatter(
-            x=hist_data[date_col],
-            y=hist_data["Close"],
-            mode="lines",
-            line=dict(color=line_color, width=2.5),
-            fill="tozeroy",
-            fillcolor=fill_color,
-            hoverinfo="x+y",
-            hovertemplate="<b>Date:</b> %{x|%b %d, %Y}<br><b>Price:</b> $%{y:.2f} CAD<extra></extra>"
-        ))
-        fig_price.update_layout(
-            template="plotly_dark",
-            paper_bgcolor="#0b1120",
-            plot_bgcolor="#0b1120",
-            margin=dict(l=0, r=0, t=10, b=10),
-            height=280,
-            xaxis=dict(showgrid=False, showticklabels=True),
-            yaxis=dict(showgrid=True, gridcolor="#1e293b", side="right"),
-        )
-        st.plotly_chart(fig_price, use_container_width=True)
+    # Render TradingView Interactive Area Chart
+    render_tradingview_area_chart(hist_data, is_positive=is_positive)
 
     st.markdown("---")
 
@@ -1060,7 +1184,7 @@ def render_dashboard():
     )
 
     # -------------------------------------------------------------------------
-    # TAB 1: Filtered Watchlist 
+    # TAB 1: Filtered Watchlist (Polished Step 3 Implementation)
     # -------------------------------------------------------------------------
     with tab_data:
         col_tab_info, col_clear = st.columns([7.5, 2.5])
@@ -1080,12 +1204,15 @@ def render_dashboard():
                     return "color: #fbbf24; background-color: rgba(245, 158, 11, 0.20); font-weight: 700; border-radius: 4px;"
                 return "color: #9ca3af;"
 
-            # Visual Market Data indicator column without target="_blank"
+            # Prepare Rich Asset column: combines symbol with company title and chart badge
             display_df = filtered_df.copy()
-            display_df.insert(0, "Market Data", "View 📊")
+            display_df["Asset"] = display_df.apply(
+                lambda r: f"{r['Symbol']}  •  {r['Company']} 📊" if pd.notna(r.get("Company")) and r["Company"] != "—" else f"{r['Symbol']} 📊",
+                axis=1
+            )
 
             columns_order = [
-                "Market Data", "Symbol", "Company", "Price", "Signal", "RSI_14", "SMA_50", "SMA_200", "Rationale"
+                "Asset", "Price", "Signal", "RSI_14", "SMA_50", "SMA_200", "Rationale"
             ]
             display_cols = [c for c in columns_order if c in display_df.columns]
 
@@ -1100,19 +1227,49 @@ def render_dashboard():
                 .map(signal_styler, subset=["Signal"])
             )
 
-            st.caption("💡 **Tip:** Click on **View 📊** or any stock row to open full live Market Fundamentals & Charts.")
+            # Elegant fintech prompt
+            st.markdown(
+                '<div class="tn-table-hint">💡 <b>Click any row</b> to open its TradingView interactive charts, valuation metrics, and technical profile.</div>',
+                unsafe_allow_html=True
+            )
 
-            # Row click selection locks navigation strictly inside the SAME tab
+            # High-fidelity table configuration
             event = st.dataframe(
                 styled_df,
                 column_config={
-                    "Market Data": st.column_config.TextColumn(
-                        "Market Data",
-                        help="Click to open Wealthsimple-style fundamentals and charts",
+                    "Asset": st.column_config.TextColumn(
+                        "Asset & Security",
+                        help="Select any asset to load institutional financial charts and profile",
+                        width="large",
+                    ),
+                    "Price": st.column_config.NumberColumn(
+                        "Price (CAD)",
+                        format="$%.2f",
                         width="small",
                     ),
-                    "Symbol": st.column_config.TextColumn("Symbol", width="small"),
-                    "Company": st.column_config.TextColumn("Company", width="medium"),
+                    "Signal": st.column_config.TextColumn(
+                        "Signal",
+                        width="medium",
+                    ),
+                    "RSI_14": st.column_config.NumberColumn(
+                        "RSI (14D)",
+                        format="%.1f",
+                        width="small",
+                    ),
+                    "SMA_50": st.column_config.NumberColumn(
+                        "50D SMA",
+                        format="$%.2f",
+                        width="small",
+                    ),
+                    "SMA_200": st.column_config.NumberColumn(
+                        "200D SMA",
+                        format="$%.2f",
+                        width="small",
+                    ),
+                    "Rationale": st.column_config.TextColumn(
+                        "Signal Rationale",
+                        width="large",
+                    ),
                 },
                 use_container_width=True,
                 hide_index=True,
@@ -1121,7 +1278,7 @@ def render_dashboard():
                 key="watchlist_table_selection",
             )
 
-            # Detect row click and navigate in the SAME tab
+            # Row click detection with seamless in-tab routing
             if hasattr(event, "selection") and event.selection and event.selection.rows:
                 selected_row_idx = event.selection.rows[0]
                 clicked_symbol = filtered_df.iloc[selected_row_idx]["Symbol"]
