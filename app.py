@@ -372,8 +372,8 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# Core Watchlist Company Names Mapping (59 TSX Equities & ETFs)
-COMPANY_NAMES = {
+# Core Baseline Watchlist Company Names Mapping
+BASE_COMPANY_NAMES = {
     "XEQT.TO": "iShares Core Equity ETF Portfolio",
     "XIU.TO": "iShares S&P/TSX 60 Index ETF",
     "RY.TO": "Royal Bank of Canada",
@@ -437,6 +437,23 @@ COMPANY_NAMES = {
 
 ALL_SIGNAL_TYPES = ["BUY / ACCUMULATE", "SELL / EXIT", "TRIM / TAKE PROFIT", "KEEP / HOLD"]
 DEFAULT_ACTIVE_SIGNALS = ["BUY / ACCUMULATE", "SELL / EXIT", "TRIM / TAKE PROFIT"]
+
+# -----------------------------------------------------------------------------
+# Dynamic Name Resolver with In-Memory Caching
+# -----------------------------------------------------------------------------
+@st.cache_data(ttl=86400)
+def resolve_company_name(ticker: str) -> str:
+    ticker = str(ticker).strip().upper()
+    if ticker in BASE_COMPANY_NAMES:
+        return BASE_COMPANY_NAMES[ticker]
+    try:
+        t = yf.Ticker(ticker)
+        name = t.info.get("shortName") or t.info.get("longName")
+        if name:
+            return name
+    except Exception:
+        pass
+    return ticker
 
 # -----------------------------------------------------------------------------
 # Session State Initialization (Pre-Widget Registration)
@@ -599,7 +616,7 @@ def load_screener_results():
             df.rename(columns={"Ticker": "Symbol"}, inplace=True)
 
         if "Company" not in df.columns and "Symbol" in df.columns:
-            df["Company"] = df["Symbol"].map(lambda s: COMPANY_NAMES.get(str(s).strip(), "—"))
+            df["Company"] = df["Symbol"].map(resolve_company_name)
 
         for col in ["Price", "RSI_14", "SMA_50", "SMA_200"]:
             if col in df.columns:
@@ -616,6 +633,60 @@ def load_screener_results():
     except Exception as e:
         st.error(f"Error processing screener data: {e}")
         return pd.DataFrame(), None
+
+# -----------------------------------------------------------------------------
+# On-Demand Technical Indicator Engine (TN-007 Core)
+# -----------------------------------------------------------------------------
+@st.cache_data(ttl=600)
+def calculate_on_demand_technicals(ticker: str):
+    """Calculates RSI_14, SMA_50, SMA_200, and signal dynamically for any user ticker."""
+    try:
+        t = yf.Ticker(ticker)
+        df_hist = t.history(period="1y", interval="1d")
+        if df_hist.empty or len(df_hist) < 20:
+            return None
+
+        closes = df_hist["Close"]
+        cur_price = float(closes.iloc[-1])
+
+        # 50-day and 200-day Simple Moving Averages
+        sma_50 = float(closes.rolling(window=50).mean().iloc[-1]) if len(closes) >= 50 else float(closes.mean())
+        sma_200 = float(closes.rolling(window=200).mean().iloc[-1]) if len(closes) >= 200 else float(closes.mean())
+
+        # 14-day RSI (Wilder's Smoothing)
+        delta = closes.diff()
+        gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
+        loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+        rs = gain / loss
+        rsi_14 = float((100 - (100 / (1 + rs))).iloc[-1])
+
+        if pd.isna(rsi_14):
+            rsi_14 = 50.0
+
+        # TrendNorth Standard Momentum Signal Engine
+        if sma_50 > sma_200 and rsi_14 <= 40.0:
+            signal = "BUY / ACCUMULATE"
+            rationale = "Bullish trend + Pullback dip"
+        elif sma_50 < sma_200:
+            signal = "SELL / EXIT"
+            rationale = "Death Cross (Bearish trend)"
+        elif rsi_14 >= 75.0:
+            signal = "TRIM / TAKE PROFIT"
+            rationale = "Overextended momentum"
+        else:
+            signal = "KEEP / HOLD"
+            rationale = "Trading within baseline"
+
+        return {
+            "price": cur_price,
+            "sma_50": sma_50,
+            "sma_200": sma_200,
+            "rsi_14": rsi_14,
+            "signal": signal,
+            "rationale": rationale,
+        }
+    except Exception:
+        return None
 
 # -----------------------------------------------------------------------------
 # Fundamental & Market Data Fetcher
@@ -672,7 +743,7 @@ def fetch_stock_market_details(ticker: str):
 
         return {
             "symbol": ticker,
-            "shortName": info.get("shortName") or info.get("longName") or COMPANY_NAMES.get(ticker, ticker),
+            "shortName": info.get("shortName") or info.get("longName") or resolve_company_name(ticker),
             "currentPrice": cur_p if cur_p else 0.0,
             "priceDiff": price_diff,
             "pctDiff": pct_diff,
@@ -852,24 +923,22 @@ def render_tradingview_area_chart(df_hist: pd.DataFrame, is_positive: bool = Tru
 def render_market_data_page(ticker: str):
     st.markdown("<div style='margin-top: 25px;'></div>", unsafe_allow_html=True)
 
-    # 1. Top Navigation Bar: Back Button & Stock Switcher
-    col_back, col_spacer, col_switch = st.columns([3.0, 4.0, 3.0])
+    # 1. Top Navigation Bar: Back Button & Dynamic Stock Switcher
+    col_back, col_spacer, col_switch = st.columns([3.0, 3.5, 3.5])
     with col_back:
         if st.button("⬅️ Back to Watchlist", use_container_width=True, type="primary"):
             st.query_params.clear()
             st.rerun()
 
     with col_switch:
-        all_syms = sorted(list(COMPANY_NAMES.keys()))
-        curr_idx = all_syms.index(ticker) if ticker in all_syms else 0
-        new_pick = st.selectbox(
-            "Switch Stock",
-            options=all_syms,
-            index=curr_idx,
+        new_pick_input = st.text_input(
+            "Search Ticker",
+            value=ticker,
+            placeholder="Search any TSX / US ticker (e.g. SHOP.TO, AQN.TO)",
             label_visibility="collapsed"
-        )
-        if new_pick != ticker:
-            st.query_params["ticker"] = new_pick
+        ).strip().upper()
+        if new_pick_input and new_pick_input != ticker:
+            st.query_params["ticker"] = new_pick_input
             st.rerun()
 
     st.markdown("<div style='margin-bottom: 20px;'></div>", unsafe_allow_html=True)
@@ -878,7 +947,7 @@ def render_market_data_page(ticker: str):
         d = fetch_stock_market_details(ticker)
 
     if not d:
-        st.error(f"Unable to retrieve market data for {ticker}. Please return to the watchlist.")
+        st.error(f"Unable to retrieve market data for {ticker}. Please ensure the ticker symbol is valid (e.g., add '.TO' for TSX equities).")
         return
 
     # 2. Header: Prominent Ticker and Subtitle Company Name
@@ -1097,7 +1166,7 @@ def render_dashboard():
 
     df_raw, scan_time = load_screener_results()
 
-    # 1. Sidebar Header & Filters
+    # 1. Sidebar Header, On-Demand Search & Filters
     with st.sidebar:
         st.markdown(
             f"""
@@ -1114,15 +1183,18 @@ def render_dashboard():
 
         st.markdown("---")
 
-        all_symbols = sorted(list(COMPANY_NAMES.keys()))
-        selected_stock_detail = st.selectbox(
-            "📊 Open Market Data Details",
-            options=["-- Select a Stock --"] + all_symbols,
-            help="Choose any TSX ticker to view Wealthsimple-style fundamentals and historical charts."
-        )
-        if selected_stock_detail != "-- Select a Stock --":
-            st.query_params["ticker"] = selected_stock_detail
-            st.rerun()
+        # Dynamic On-Demand Symbol Lookup (TN-007)
+        st.markdown("**🔍 On-Demand Asset Lookup**")
+        quick_search_sym = st.text_input(
+            "Quick Search Any Symbol",
+            placeholder="Type any TSX or US ticker (e.g. AQN.TO, CSU.TO, AAPL)",
+            label_visibility="collapsed"
+        ).strip().upper()
+
+        if st.button("📊 Open Market View", use_container_width=True):
+            if quick_search_sym:
+                st.query_params["ticker"] = quick_search_sym
+                st.rerun()
 
         st.markdown("---")
         st.subheader("🔍 Screener Filters")
@@ -1153,7 +1225,7 @@ def render_dashboard():
         )
 
         search_query = st.text_input(
-            "Find Symbol or Company",
+            "Filter Filtered Table",
             placeholder="e.g. SHOP, BMO, Enbridge",
             key="filter_search",
         ).strip().upper()
@@ -1388,7 +1460,7 @@ def render_dashboard():
             )
 
     # -------------------------------------------------------------------------
-    # TAB 2: Pocket Trader (High Contrast Light Mode)
+    # TAB 2: Pocket Trader (TN-007 Dynamic Tracking)
     # -------------------------------------------------------------------------
     with tab_pocket:
         col_hdr1, col_hdr2 = st.columns([3, 2])
@@ -1403,13 +1475,47 @@ def render_dashboard():
                 icon="ℹ️"
             )
 
-        with st.expander("➕ Log Single or Multiple Positions (Batch Setup)", expanded=False):
-            available_symbols = sorted(list(COMPANY_NAMES.keys()))
+        with st.expander("➕ Log Single or Multiple Positions (Any TSX / US Symbol)", expanded=False):
+            st.write("**Option A: Add Any Symbol On Demand**")
+            col_cust1, col_cust2, col_cust3, col_cust4, col_cust5 = st.columns(5)
+            with col_cust1:
+                custom_sym = st.text_input("Ticker Symbol", placeholder="e.g. AQN.TO, CSU.TO, AAPL").strip().upper()
+            with col_cust2:
+                custom_date = st.date_input("Entry Date", value=date.today(), key="custom_entry_date")
+            with col_cust3:
+                custom_price = st.number_input("Purchase Price", min_value=0.01, value=10.0, step=0.5, key="custom_entry_price")
+            with col_cust4:
+                custom_shares = st.number_input("Share Count", min_value=1, value=10, step=1, key="custom_entry_shares")
+            with col_cust5:
+                custom_gain = st.number_input("Target Gain ($/sh)", min_value=0.1, value=5.0, step=0.5, key="custom_entry_gain")
+
+            if st.button("➕ Add Custom Position to Tracker", type="primary"):
+                if custom_sym:
+                    cand = {
+                        "Symbol": custom_sym,
+                        "Buy Date": str(custom_date),
+                        "Buy Price": float(custom_price),
+                        "Shares": int(custom_shares),
+                        "Target Gain": float(custom_gain),
+                    }
+                    if not is_exact_duplicate(st.session_state.pocket_positions, cand):
+                        st.session_state.pocket_positions.append(cand)
+                        sync_pocket_to_storage()
+                        st.success(f"Added {custom_sym} to your Pocket Trader!")
+                        st.rerun()
+                    else:
+                        st.warning("This exact position is already logged.")
+                else:
+                    st.error("Please enter a valid ticker symbol.")
+
+            st.markdown("---")
+            st.write("**Option B: Batch Select from Watchlist**")
+            available_symbols = sorted(list(set(df_raw["Symbol"].dropna().unique()).union(BASE_COMPANY_NAMES.keys())))
             chosen_symbols = st.multiselect(
                 "Choose Symbol(s) to add to your tracker:",
                 options=available_symbols,
                 default=[],
-                help="Pick one or multiple TSX symbols. An editable staging table will appear below.",
+                help="Pick one or multiple symbols. An editable staging table will appear below.",
             )
 
             if chosen_symbols:
@@ -1424,7 +1530,7 @@ def render_dashboard():
 
                     staging_rows.append({
                         "Symbol": sym,
-                        "Company": COMPANY_NAMES.get(sym, "—"),
+                        "Company": resolve_company_name(sym),
                         "Buy Date": str(date.today()),
                         "Buy Price": round(cur_price, 2),
                         "Shares": 10,
@@ -1439,12 +1545,12 @@ def render_dashboard():
                     key="pocket_staging_editor",
                 )
 
-                if st.button("➕ Add All Selected Positions to Pocket Trader", type="primary"):
+                if st.button("➕ Add All Batch Positions", type="secondary"):
                     added_count = 0
                     dup_count = 0
                     for _, r in edited_staging.iterrows():
                         cand = {
-                            "Symbol": str(r["Symbol"]).strip(),
+                            "Symbol": str(r["Symbol"]).strip().upper(),
                             "Buy Date": str(r["Buy Date"]),
                             "Buy Price": float(r["Buy Price"]),
                             "Shares": int(r["Shares"]),
@@ -1458,13 +1564,13 @@ def render_dashboard():
 
                     sync_pocket_to_storage()
                     if dup_count > 0:
-                        st.warning(f"Added {added_count} position(s). Skipped {dup_count} exact duplicate(s).")
+                        st.warning(f"Added {added_count} position(s). Skipped {dup_count} duplicate(s).")
                     else:
                         st.success(f"Added {added_count} position(s) to Pocket Trader!")
                     st.rerun()
 
         if not st.session_state.pocket_positions:
-            st.info("No active positions tracked in Pocket Trader yet. Add a stock using the batch form above or upload a CSV below.")
+            st.info("No active positions tracked in Pocket Trader yet. Add any TSX/US stock using the form above or upload a CSV below.")
         else:
             calc_rows = []
             for i, pos in enumerate(st.session_state.pocket_positions):
@@ -1476,12 +1582,24 @@ def render_dashboard():
                 cur_price = buy_p
                 sig = "—"
                 rsi = 50.0
+
+                # 1. Match from screener batch if available
+                matched_in_batch = False
                 if not df_raw.empty:
                     match = df_raw[df_raw["Symbol"] == sym]
                     if not match.empty:
                         cur_price = float(match["Price"].iloc[0])
                         sig = str(match["Signal"].iloc[0])
                         rsi = float(match["RSI_14"].iloc[0])
+                        matched_in_batch = True
+
+                # 2. TN-007 Dynamic Fallback for unlisted/custom symbols
+                if not matched_in_batch:
+                    tech = calculate_on_demand_technicals(sym)
+                    if tech:
+                        cur_price = tech["price"]
+                        sig = tech["signal"]
+                        rsi = tech["rsi_14"]
 
                 cost_basis = buy_p * shares
                 market_val = cur_price * shares
@@ -1493,7 +1611,7 @@ def render_dashboard():
                 calc_rows.append({
                     "Index": i,
                     "Symbol": sym,
-                    "Company": COMPANY_NAMES.get(sym, "—"),
+                    "Company": resolve_company_name(sym),
                     "Buy Date": pos.get("Buy Date", "—"),
                     "Buy Price": buy_p,
                     "Current Price": cur_price,
@@ -1627,26 +1745,22 @@ def render_dashboard():
                                 required_cols = {"Symbol", "Buy Price", "Shares"}
                                 if required_cols.issubset(imp_df.columns):
                                     merged_count = 0
-                                    skipped_universe = []
                                     skipped_duplicates = 0
 
                                     for _, row in imp_df.iterrows():
                                         sym = str(row["Symbol"]).strip().upper()
-                                        if sym in COMPANY_NAMES:
-                                            cand = {
-                                                "Symbol": sym,
-                                                "Buy Date": str(row.get("Buy Date", date.today())),
-                                                "Buy Price": float(row["Buy Price"]),
-                                                "Shares": int(row["Shares"]),
-                                                "Target Gain": float(row.get("Target Gain", 10.0)),
-                                            }
-                                            if not is_exact_duplicate(st.session_state.pocket_positions, cand):
-                                                st.session_state.pocket_positions.append(cand)
-                                                merged_count += 1
-                                            else:
-                                                skipped_duplicates += 1
+                                        cand = {
+                                            "Symbol": sym,
+                                            "Buy Date": str(row.get("Buy Date", date.today())),
+                                            "Buy Price": float(row["Buy Price"]),
+                                            "Shares": int(row["Shares"]),
+                                            "Target Gain": float(row.get("Target Gain", 10.0)),
+                                        }
+                                        if not is_exact_duplicate(st.session_state.pocket_positions, cand):
+                                            st.session_state.pocket_positions.append(cand)
+                                            merged_count += 1
                                         else:
-                                            skipped_universe.append(sym)
+                                            skipped_duplicates += 1
 
                                     st.session_state.last_processed_file_id = file_sig
                                     sync_pocket_to_storage()
@@ -1654,10 +1768,7 @@ def render_dashboard():
                                     msg = f"Import complete: {merged_count} position(s) added."
                                     if skipped_duplicates:
                                         msg += f" {skipped_duplicates} duplicate(s) skipped."
-                                    if skipped_universe:
-                                        st.warning(f"{msg} The following were skipped as they are outside the 59 tracked TSX assets: {', '.join(set(skipped_universe))}")
-                                    else:
-                                        st.success(msg)
+                                    st.success(msg)
                                     st.rerun()
                                 else:
                                     st.error("Missing required headers: Symbol, Buy Price, Shares.")
@@ -1755,7 +1866,7 @@ def render_dashboard():
         with st.expander("3. Pocket Trader Execution Guide", expanded=False):
             st.markdown(
                 """
-- **Batch Position Logging:** Select multiple symbols from the 59 tracked assets to track lots simultaneously.
+- **On-Demand & Batch Logging:** Track any TSX or US ticker on demand with custom entry date and target price.
 - **Target Gain Tracking:** Specify your profit objective (e.g., $10/share). The status badge dynamically turns into **🎯 TARGET REACHED** when prices cross above.
 - **Quick Editing:** Use the *Quick Edit Existing Position* drawer to update shares, entry date, buy price, or target price at any time.
 - **Privacy-First Storage:** Positions persist in browser local storage and can be exported or merged anytime via CSV files.
