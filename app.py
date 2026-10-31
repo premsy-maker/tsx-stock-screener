@@ -50,7 +50,7 @@ st.set_page_config(
 )
 
 # -----------------------------------------------------------------------------
-# Wealthsimple Minimalist Light Theme Tokens & CSS Injection
+# Wealthsimple Minimalist Clean Light Theme
 # -----------------------------------------------------------------------------
 bg_main = "#f8fafc"
 bg_card = "#ffffff"
@@ -58,7 +58,7 @@ bg_card_hover = "#f1f5f9"
 bg_sidebar = "#ffffff"
 border_col = "#e2e8f0"
 text_title = "#0f172a"
-text_sub = "#64748b"
+text_sub = "#475569"
 input_bg = "#ffffff"
 input_text = "#0f172a"
 plotly_tpl = "plotly_white"
@@ -80,7 +80,7 @@ st.markdown(
         color: {text_title} !important;
     }}
 
-    /* Container Spacing: Clears top Streamlit header toolbar */
+    /* Container Spacing */
     .block-container {{
         padding-top: 3.2rem !important;
         padding-bottom: 3rem !important;
@@ -95,22 +95,31 @@ st.markdown(
     section[data-testid="stSidebar"] h2, 
     section[data-testid="stSidebar"] h3, 
     section[data-testid="stSidebar"] label,
-    section[data-testid="stSidebar"] p {{
+    section[data-testid="stSidebar"] p,
+    section[data-testid="stSidebar"] span {{
         color: {text_title} !important;
     }}
     section[data-testid="stSidebar"] .stCaption {{
         color: {text_sub} !important;
     }}
 
-    /* Inputs & Select Boxes */
-    div[data-baseweb="input"], div[data-baseweb="select"] {{
+    /* Inputs, Select Boxes, & Popovers */
+    div[data-baseweb="input"], div[data-baseweb="select"], div[data-baseweb="select"] > div {{
         background-color: {input_bg} !important;
         border: 1px solid {border_col} !important;
         border-radius: 8px !important;
+        color: {input_text} !important;
     }}
     div[data-baseweb="input"] input, div[data-baseweb="select"] * {{
         color: {input_text} !important;
         background-color: transparent !important;
+    }}
+    ul[role="listbox"], li[role="option"] {{
+        background-color: #ffffff !important;
+        color: #0f172a !important;
+    }}
+    li[role="option"]:hover {{
+        background-color: #f1f5f9 !important;
     }}
 
     /* Multiselect Tags */
@@ -124,9 +133,9 @@ st.markdown(
         color: #0369a1 !important;
     }}
 
-    /* Metric Cards */
+    /* Universal Metric Cards (Dashboard & Pocket Trader) */
     div[data-testid="stMetric"] {{
-        background-color: {bg_card} !important;
+        background-color: #ffffff !important;
         border: 1px solid {border_col} !important;
         border-radius: 12px !important;
         padding: 14px 18px !important;
@@ -134,29 +143,35 @@ st.markdown(
         display: flex !important;
         flex-direction: column !important;
         justify-content: center !important;
-        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04) !important;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05) !important;
+    }}
+    div[data-testid="stMetricLabel"] {{
+        color: #475569 !important;
     }}
     div[data-testid="stMetricLabel"] * {{
-        color: {text_sub} !important;
+        color: #475569 !important;
         font-weight: 700 !important;
         font-size: 0.80rem !important;
         text-transform: uppercase !important;
         letter-spacing: 0.5px !important;
     }}
+    div[data-testid="stMetricValue"] {{
+        color: #0f172a !important;
+    }}
     div[data-testid="stMetricValue"] * {{
-        color: {text_title} !important;
+        color: #0f172a !important;
         font-weight: 800 !important;
-        font-size: 1.15rem !important;
+        font-size: 1.25rem !important;
         line-height: 1.25 !important;
     }}
 
     /* Top Sub-Header Meta Tags */
     .tn-meta-bar span {{
-        background: {bg_card} !important;
+        background: #ffffff !important;
         border: 1px solid {border_col} !important;
-        padding: 5px 12px;
+        padding: 6px 14px;
         border-radius: 8px;
-        color: {text_sub} !important;
+        color: #475569 !important;
         font-size: 0.85rem;
         box-shadow: 0 1px 2px rgba(0,0,0,0.03);
     }}
@@ -164,7 +179,7 @@ st.markdown(
     /* Interactive Embedded KPI Filter Cards */
     div.kpi-card-container button {{
         width: 100% !important;
-        background-color: {bg_card} !important;
+        background-color: #ffffff !important;
         border: 1px solid {border_col} !important;
         border-radius: 12px !important;
         padding: 12px 14px !important;
@@ -190,7 +205,7 @@ st.markdown(
 
     /* Wealthsimple Detail & Metric Cards */
     .ws-card {{
-        background-color: {bg_card};
+        background-color: #ffffff;
         border: 1px solid {border_col};
         border-radius: 12px;
         padding: 20px 24px;
@@ -208,10 +223,10 @@ st.markdown(
         transition: border-color 0.15s ease;
     }}
     .ws-stat-tile:hover {{
-        border-color: #38bdf8;
+        border-color: #0284c7;
     }}
     .ws-metric-label {{
-        color: {text_sub};
+        color: #64748b;
         font-size: 0.78rem;
         font-weight: 600;
         text-transform: uppercase;
@@ -219,7 +234,7 @@ st.markdown(
         margin-bottom: 4px;
     }}
     .ws-metric-val {{
-        color: {text_title};
+        color: #0f172a;
         font-size: 1.15rem;
         font-weight: 800;
         font-variant-numeric: tabular-nums;
@@ -248,57 +263,68 @@ st.markdown(
         gap: 6px;
     }}
     .ws-meta-pill b {{
-        color: {text_title};
+        color: #0f172a;
     }}
 
-    /* Secondary & Primary Buttons */
+    /* Buttons */
     button[kind="secondary"] {{
-        background-color: {bg_card} !important;
+        background-color: #ffffff !important;
         border: 1px solid {border_col} !important;
-        color: {text_title} !important;
+        color: #0f172a !important;
         border-radius: 8px !important;
     }}
     button[kind="secondary"]:hover {{
-        background-color: {bg_card_hover} !important;
+        background-color: #f1f5f9 !important;
         border-color: #0284c7 !important;
         color: #0284c7 !important;
     }}
 
-    /* Tabs Navigation */
+    /* High-Contrast Visible Tabs */
     button[data-testid="stTab"] {{
         background-color: transparent !important;
         border: none !important;
-        padding: 8px 16px !important;
+        padding: 10px 18px !important;
     }}
     button[data-testid="stTab"] p {{
-        color: {text_sub} !important;
+        color: #475569 !important;
         font-weight: 600 !important;
-        font-size: 0.94rem !important;
+        font-size: 0.96rem !important;
     }}
     button[data-testid="stTab"][aria-selected="true"] {{
-        border-bottom: 2px solid {active_tab_color} !important;
+        border-bottom: 3px solid {active_tab_color} !important;
     }}
     button[data-testid="stTab"][aria-selected="true"] p {{
         color: {active_tab_color} !important;
-        font-weight: 700 !important;
+        font-weight: 800 !important;
     }}
     button[data-testid="stTab"]:hover p {{
-        color: {text_title} !important;
+        color: #0f172a !important;
     }}
 
     /* Expanders */
     div[data-testid="stExpander"] {{
-        background-color: {bg_card} !important;
+        background-color: #ffffff !important;
         border: 1px solid {border_col} !important;
         border-radius: 10px !important;
+        box-shadow: 0 1px 2px rgba(0,0,0,0.03) !important;
     }}
     div[data-testid="stExpander"] summary,
     div[data-testid="stExpander"] div[role="region"] {{
-        background-color: {bg_card} !important;
-        color: {text_title} !important;
+        background-color: #ffffff !important;
+        color: #0f172a !important;
     }}
     div[data-testid="stExpander"] * {{
-        color: {text_title} !important;
+        color: #0f172a !important;
+    }}
+
+    /* Fix Dark Code Blocks in User Manual */
+    code {{
+        background-color: #f1f5f9 !important;
+        color: #0f172a !important;
+        padding: 2px 6px !important;
+        border-radius: 4px !important;
+        border: 1px solid #e2e8f0 !important;
+        font-weight: 700 !important;
     }}
 
     /* Modern Table Hint Pill */
@@ -318,16 +344,16 @@ st.markdown(
         color: #0284c7;
     }}
 
-    /* Dataframe Theming & Selection Column Concealment */
+    /* Dataframe Overrides */
     div[data-testid="stDataFrame"] {{
-        background-color: {bg_card} !important;
+        background-color: #ffffff !important;
         border: 1px solid {border_col} !important;
         border-radius: 12px !important;
         overflow: hidden !important;
         box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04) !important;
     }}
 
-    /* Hide the radio/checkbox column rendered by on_select="rerun" on the watchlist */
+    /* Hide the radio/checkbox column on watchlist */
     div[data-testid="stDataFrame"] div[role="columnheader"]:first-child,
     div[data-testid="stDataFrame"] div[role="row"] > div[role="gridcell"]:first-child:has(input[type="checkbox"]),
     div[data-testid="stDataFrame"] div[role="row"] > div[role="gridcell"]:first-child:has(input[type="radio"]) {{
@@ -688,7 +714,7 @@ def fetch_stock_chart_history(ticker: str, period: str = "1y", interval: str = "
         return pd.DataFrame()
 
 # -----------------------------------------------------------------------------
-# TradingView Lightweight Interactive Financial Chart (Light Mode)
+# TradingView Lightweight Interactive Financial Chart (Clean Light Palette)
 # -----------------------------------------------------------------------------
 def render_tradingview_area_chart(df_hist: pd.DataFrame, is_positive: bool = True):
     if df_hist.empty or "Close" not in df_hist.columns:
@@ -822,7 +848,7 @@ def render_tradingview_area_chart(df_hist: pd.DataFrame, is_positive: bool = Tru
     components.html(tv_html, height=320)
 
 # -----------------------------------------------------------------------------
-# Wealthsimple-Style Market Details Page (Light Theme)
+# Wealthsimple-Style Market Details Page
 # -----------------------------------------------------------------------------
 def render_market_data_page(ticker: str):
     st.markdown("<div style='margin-top: 25px;'></div>", unsafe_allow_html=True)
@@ -1276,7 +1302,7 @@ def render_dashboard():
                     return "color: #b91c1c; background-color: rgba(239, 68, 68, 0.14); font-weight: 700; border-radius: 4px;"
                 elif "TRIM" in str(val):
                     return "color: #b45309; background-color: rgba(245, 158, 11, 0.14); font-weight: 700; border-radius: 4px;"
-                return "color: #64748b;"
+                return "color: #475569;"
 
             display_df = filtered_df.copy()
             display_df["Asset"] = display_df.apply(
@@ -1363,7 +1389,7 @@ def render_dashboard():
             )
 
     # -------------------------------------------------------------------------
-    # TAB 2: Pocket Trader
+    # TAB 2: Pocket Trader (High Contrast Light Mode)
     # -------------------------------------------------------------------------
     with tab_pocket:
         col_hdr1, col_hdr2 = st.columns([3, 2])
@@ -1658,7 +1684,7 @@ def render_dashboard():
                         "BUY / ACCUMULATE": "#16a34a",
                         "SELL / EXIT": "#dc2626",
                         "TRIM / TAKE PROFIT": "#d97706",
-                        "KEEP / HOLD": "#94a3b8",
+                        "KEEP / HOLD": "#64748b",
                     },
                     template=plotly_tpl,
                 )
@@ -1687,7 +1713,7 @@ def render_dashboard():
                         "BUY / ACCUMULATE": "#16a34a",
                         "SELL / EXIT": "#dc2626",
                         "TRIM / TAKE PROFIT": "#d97706",
-                        "KEEP / HOLD": "#94a3b8",
+                        "KEEP / HOLD": "#64748b",
                     },
                     template=plotly_tpl,
                 )
@@ -1746,7 +1772,7 @@ def render_dashboard():
             )
 
     # -------------------------------------------------------------------------
-    # Floating Feedback Popover (Bottom-Right Anchored)
+    # Floating Feedback Popover
     # -------------------------------------------------------------------------
     with st.popover("💬 Submit Feedback"):
         st.markdown("### 💬 TrendNorth Feedback")
