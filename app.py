@@ -372,12 +372,12 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# Core Baseline Watchlist Company Names Mapping (Expanded with TSX Blue Chips)
+# -----------------------------------------------------------------------------
+# Baseline 59 Monitored TSX Universe
+# -----------------------------------------------------------------------------
 BASE_COMPANY_NAMES = {
     "XEQT.TO": "iShares Core Equity ETF Portfolio",
     "XIU.TO": "iShares S&P/TSX 60 Index ETF",
-    "AC.TO": "Air Canada",
-    "AQN.TO": "Algonquin Power & Utilities",
     "RY.TO": "Royal Bank of Canada",
     "TD.TO": "Toronto-Dominion Bank",
     "BMO.TO": "Bank of Montreal",
@@ -437,6 +437,61 @@ BASE_COMPANY_NAMES = {
     "K.TO": "Kinross Gold",
 }
 
+# Extended Lookup Catalog (for Autocomplete suggestions: AC, AQN, etc.)
+EXTENDED_CATALOG = {
+    **BASE_COMPANY_NAMES,
+    "AC.TO": "Air Canada",
+    "AQN.TO": "Algonquin Power & Utilities",
+    "BB.TO": "BlackBerry Limited",
+    "CJT.TO": "Cargojet Inc.",
+    "BBD-B.TO": "Bombardier Inc.",
+    "POW.TO": "Power Corporation of Canada",
+    "LUN.TO": "Lundin Mining",
+    "HBM.TO": "Hudbay Minerals",
+    "IVN.TO": "Ivanhoe Mines",
+    "ARX.TO": "ARC Resources",
+    "CPG.TO": "Crescent Point Energy",
+    "VET.TO": "Vermilion Energy",
+    "MEG.TO": "MEG Energy",
+    "PAAS.TO": "Pan American Silver",
+    "EQX.TO": "Equinox Gold",
+    "NVEI.TO": "Nuvei Corporation",
+    "LSPD.TO": "Lightspeed Commerce",
+    "DND.TO": "Dye & Durham",
+    "CTS.TO": "Converge Technology Solutions",
+    "NFI.TO": "NFI Group",
+    "TIH.TO": "Toromont Industries",
+    "RCH.TO": "Richelieu Hardware",
+    "MTL.TO": "Mullen Group",
+    "TFII.TO": "TFI International",
+    "BYD.TO": "Boyd Group Services",
+    "PBH.TO": "Premium Brands Holdings",
+    "SAP.TO": "Saputo Inc.",
+    "JWEL.TO": "JAMIESON Wellness",
+    "MTY.TO": "MTY Food Group",
+    "CU.TO": "Canadian Utilities",
+    "NPI.TO": "Northland Power",
+    "BLX.TO": "Boralex Inc.",
+    "INE.TO": "Innergex Renewable Energy",
+    "TA.TO": "TransAlta Corporation",
+    "RNW.TO": "TransAlta Renewables",
+    "CAR-UN.TO": "Canadian Apartment Properties REIT",
+    "REI-UN.TO": "RioCan REIT",
+    "GRT-UN.TO": "Granite REIT",
+    "CHP-UN.TO": "Choice Properties REIT",
+    "DIR-UN.TO": "Dream Industrial REIT",
+    "SRU-UN.TO": "SmartCentres REIT",
+    "AP-UN.TO": "Allied Properties REIT",
+    "HR-UN.TO": "H&R REIT",
+    "IIP-UN.TO": "InterRent REIT",
+    "KMP-UN.TO": "Killam Apartment REIT",
+    "MI-UF.TO": "Minto Apartment REIT",
+    "CRR-UN.TO": "Crombie REIT",
+    "CSH-UN.TO": "Chartwell Retirement Residences",
+    "SIA.TO": "Sienna Senior Living",
+    "EXE.TO": "Extendicare Inc.",
+}
+
 ALL_SIGNAL_TYPES = ["BUY / ACCUMULATE", "SELL / EXIT", "TRIM / TAKE PROFIT", "KEEP / HOLD"]
 DEFAULT_ACTIVE_SIGNALS = ["BUY / ACCUMULATE", "SELL / EXIT", "TRIM / TAKE PROFIT"]
 
@@ -445,18 +500,15 @@ DEFAULT_ACTIVE_SIGNALS = ["BUY / ACCUMULATE", "SELL / EXIT", "TRIM / TAKE PROFIT
 # -----------------------------------------------------------------------------
 @st.cache_data(ttl=86400)
 def sanitize_and_resolve_ticker(raw_sym: str) -> tuple[str, str]:
-    """Ensures Canadian TSX format and fetches full company name dynamically."""
     sym = str(raw_sym).strip().upper()
     if not sym:
         return "", ""
 
-    # If it is already in our dictionary, return right away
-    if sym in BASE_COMPANY_NAMES:
-        return sym, BASE_COMPANY_NAMES[sym]
-    if f"{sym}.TO" in BASE_COMPANY_NAMES:
-        return f"{sym}.TO", BASE_COMPANY_NAMES[f"{sym}.TO"]
+    if sym in EXTENDED_CATALOG:
+        return sym, EXTENDED_CATALOG[sym]
+    if f"{sym}.TO" in EXTENDED_CATALOG:
+        return f"{sym}.TO", EXTENDED_CATALOG[f"{sym}.TO"]
 
-    # Try resolving via yfinance
     candidates = [sym] if ("." in sym or sym.endswith(".TO")) else [f"{sym}.TO", sym]
     for cand in candidates:
         try:
@@ -542,7 +594,7 @@ def get_tsx_market_status():
         return "CLOSED", "Market Closed (Post-Session)", "Session Ended", "Opens 9:30 AM ET next trading day"
 
 # -----------------------------------------------------------------------------
-# On-Demand Technical Indicator Engine (TN-007 Core)
+# On-Demand Technical Indicator Engine
 # -----------------------------------------------------------------------------
 @st.cache_data(ttl=600)
 def calculate_on_demand_technicals(ticker: str):
@@ -705,7 +757,6 @@ def load_screener_results():
 # -----------------------------------------------------------------------------
 @st.cache_data(ttl=1800)
 def fetch_stock_market_details(ticker: str):
-    """Fetches real-time market metrics, financials, and company profile via yfinance."""
     clean_sym, company_name = sanitize_and_resolve_ticker(ticker)
     try:
         t = yf.Ticker(clean_sym)
@@ -932,13 +983,13 @@ def render_tradingview_area_chart(df_hist: pd.DataFrame, is_positive: bool = Tru
     components.html(tv_html, height=320)
 
 # -----------------------------------------------------------------------------
-# Wealthsimple-Style Market Details Page (With "Add to Watchlist" Button)
+# Wealthsimple-Style Market Details Page
 # -----------------------------------------------------------------------------
 def render_market_data_page(ticker: str):
     clean_sym, company_name = sanitize_and_resolve_ticker(ticker)
     st.markdown("<div style='margin-top: 25px;'></div>", unsafe_allow_html=True)
 
-    # 1. Top Navigation Bar: Back Button, Add-to-Watchlist, & Autocomplete Switcher
+    # 1. Top Navigation Bar: Back Button, Dynamic Add Button, & Autocomplete Switcher
     col_back, col_add_watch, col_switch = st.columns([2.5, 3.5, 4.0])
     with col_back:
         if st.button("⬅️ Back to Watchlist", use_container_width=True, type="primary"):
@@ -946,19 +997,22 @@ def render_market_data_page(ticker: str):
             st.rerun()
 
     with col_add_watch:
-        # Check if symbol is already in custom watchlist or baseline
-        is_already_tracked = clean_sym in BASE_COMPANY_NAMES or clean_sym in st.session_state.custom_watchlist_symbols
-        if not is_already_tracked:
-            if st.button(f"➕ Monitor {clean_sym} on Watchlist", use_container_width=True):
+        # Check active status: Is it in baseline 59 or already added?
+        is_in_baseline = clean_sym in BASE_COMPANY_NAMES
+        is_in_custom = clean_sym in st.session_state.custom_watchlist_symbols
+
+        if not is_in_baseline and not is_in_custom:
+            if st.button(f"➕ Add {clean_sym} to Watchlist", use_container_width=True, type="secondary"):
                 st.session_state.custom_watchlist_symbols.append(clean_sym)
-                st.success(f"{clean_sym} is now monitored on your main screener table!")
+                st.toast(f"✅ Added {clean_sym} to your active watchlist!")
                 st.rerun()
         else:
             st.button(f"✓ {clean_sym} is Actively Monitored", disabled=True, use_container_width=True)
 
     with col_switch:
-        # Prepopulate options with searchable format "TICKER — Company"
-        searchable_list = [f"{sym} — {BASE_COMPANY_NAMES[sym]}" for sym in sorted(BASE_COMPANY_NAMES.keys())]
+        # Fuzzy searchable selectbox
+        all_catalog_syms = sorted(list(set(list(EXTENDED_CATALOG.keys()) + st.session_state.custom_watchlist_symbols)))
+        searchable_list = [f"{s} — {sanitize_and_resolve_ticker(s)[1]}" for s in all_catalog_syms]
         curr_label = f"{clean_sym} — {company_name}"
         if curr_label not in searchable_list:
             searchable_list.insert(0, curr_label)
@@ -981,7 +1035,7 @@ def render_market_data_page(ticker: str):
         d = fetch_stock_market_details(clean_sym)
 
     if not d:
-        st.error(f"Unable to retrieve market data for {clean_sym}. Please ensure the symbol is valid.")
+        st.error(f"Unable to retrieve market data for {clean_sym}. Please verify the ticker symbol.")
         return
 
     # 2. Header: Prominent Ticker and Subtitle Company Name
@@ -1217,28 +1271,29 @@ def render_dashboard():
 
         st.markdown("---")
 
-        # Autocomplete Dropdown Search (Solves Issues 1, 2, and 3)
+        # Autocomplete Dropdown Search with Hints (Typing AC shows AC.TO — Air Canada)
         st.markdown("**📊 Open Market Data Details**")
-        searchable_options = ["-- Select or Search a Stock --"] + [
-            f"{sym} — {BASE_COMPANY_NAMES[sym]}" for sym in sorted(BASE_COMPANY_NAMES.keys())
+        all_catalog_syms = sorted(list(set(list(EXTENDED_CATALOG.keys()) + st.session_state.custom_watchlist_symbols)))
+        searchable_options = ["-- Type symbol or company name --"] + [
+            f"{sym} — {sanitize_and_resolve_ticker(sym)[1]}" for sym in all_catalog_syms
         ]
         
         selected_stock_label = st.selectbox(
-            "Open Market Data Details",
+            "Search Ticker or Company",
             options=searchable_options,
-            help="Start typing any ticker (e.g. AC, SHOP, AQN) or company name for instant matches.",
+            help="Type any symbol (e.g. AC, SHOP, AQN) or company name for suggestions.",
             label_visibility="collapsed"
         )
-        if selected_stock_label != "-- Select or Search a Stock --":
+        if selected_stock_label != "-- Type symbol or company name --":
             target_sym = selected_stock_label.split(" — ")[0].strip()
             st.query_params["ticker"] = target_sym
             st.rerun()
 
-        # Instant Custom Ticker Form with Enter-Key support (Solves Issue 3 & 4)
+        # Custom Direct Lookup (for any untracked or US ticker)
         with st.form("custom_lookup_form", clear_on_submit=True):
             user_typed_ticker = st.text_input(
-                "Or enter any custom ticker:",
-                placeholder="e.g. AC, AQN, AAPL",
+                "Or search any custom ticker:",
+                placeholder="e.g. AQN, BB, AAPL",
                 help="Type any symbol and hit Enter to view its live TradingView chart and technicals."
             )
             lookup_submitted = st.form_submit_button("Search & Open ➔", use_container_width=True)
@@ -1285,7 +1340,7 @@ def render_dashboard():
         st.caption("ℹ️ **Educational / Non-Financial Advice Disclaimer**")
         st.caption("TrendNorth is an algorithmic research platform for TSX securities. All indicators and alerts are mathematical representations for self-directed screening and do not constitute financial advice.")
 
-    # Inject any custom symbols the user clicked "➕ Monitor" on
+    # Inject any custom symbols the user clicked "➕ Add <ticker> to Watchlist" on
     if not df_raw.empty and st.session_state.custom_watchlist_symbols:
         new_rows = []
         existing_syms = set(df_raw["Symbol"].dropna().unique())
@@ -1584,11 +1639,11 @@ def render_dashboard():
                     st.error("Please enter a valid ticker symbol.")
 
             st.markdown("---")
-            st.write("**Option B: Batch Select from Watchlist**")
-            available_symbols = sorted(list(set(df_raw["Symbol"].dropna().unique()).union(BASE_COMPANY_NAMES.keys())))
+            st.write("**Option B: Batch Select from Catalog**")
+            all_known = sorted(list(set(list(EXTENDED_CATALOG.keys()) + list(df_raw["Symbol"].dropna().unique()) + st.session_state.custom_watchlist_symbols)))
             chosen_symbols = st.multiselect(
                 "Choose Symbol(s) to add to your tracker:",
-                options=available_symbols,
+                options=all_known,
                 default=[],
                 help="Pick one or multiple symbols. An editable staging table will appear below.",
             )
