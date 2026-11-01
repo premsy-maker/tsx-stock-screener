@@ -15,7 +15,8 @@ import {
   ArrowUpDown, Clock, Filter, BookOpen, BarChart3,
   ChevronRight, ArrowLeft, Building2, Globe, Users,
   Check, SlidersHorizontal, ChevronDown, RotateCcw,
-  BookmarkPlus, BookmarkX, Briefcase, Sun, Moon
+  BookmarkPlus, BookmarkX, Briefcase, Sun, Moon,
+  ShieldAlert, Info
 } from 'lucide-react'
 
 interface PocketPosition {
@@ -30,6 +31,45 @@ interface PocketPosition {
 type SortField = 'symbol' | 'price' | 'rsi_14' | 'sma_50' | 'sma_200'
 type SortOrder = 'asc' | 'desc'
 type ThemeMode = 'dark' | 'light'
+
+// Helper function to resolve raw database signals into quantitative condition badges
+export function getSignalConfig(rawSignal: string, isDark: boolean) {
+  const sig = (rawSignal || '').toUpperCase()
+  if (sig.includes('BUY') || sig.includes('ACCUMULATE') || sig.includes('PULLBACK')) {
+    return {
+      label: 'Oversold Pullback',
+      tag: 'PULLBACK',
+      badgeClass: 'bg-emerald-950 text-emerald-300 border-emerald-600 font-bold',
+      cardBorder: isDark ? 'bg-slate-900 border-emerald-600/80' : 'bg-white border-emerald-300',
+      textColor: 'text-emerald-500'
+    }
+  }
+  if (sig.includes('SELL') || sig.includes('EXIT') || sig.includes('BREAKDOWN')) {
+    return {
+      label: 'Trend Breakdown',
+      tag: 'BREAKDOWN',
+      badgeClass: 'bg-rose-950 text-rose-300 border-rose-600 font-bold',
+      cardBorder: isDark ? 'bg-slate-900 border-rose-600/80' : 'bg-white border-rose-300',
+      textColor: 'text-rose-500'
+    }
+  }
+  if (sig.includes('TRIM') || sig.includes('PROFIT') || sig.includes('OVERBOUGHT')) {
+    return {
+      label: 'Momentum Overextended',
+      tag: 'OVERBOUGHT',
+      badgeClass: 'bg-amber-950 text-amber-300 border-amber-600 font-bold',
+      cardBorder: isDark ? 'bg-slate-900 border-amber-600/80' : 'bg-white border-amber-300',
+      textColor: 'text-amber-500'
+    }
+  }
+  return {
+    label: 'Neutral / In Range',
+    tag: 'NEUTRAL',
+    badgeClass: isDark ? 'text-slate-100 bg-slate-800 border-slate-600 font-bold' : 'text-slate-700 bg-slate-200 border-slate-300 font-bold',
+    cardBorder: isDark ? 'bg-slate-900 border-slate-700' : 'bg-white border-slate-200',
+    textColor: isDark ? 'text-slate-300' : 'text-slate-700'
+  }
+}
 
 export default function Dashboard() {
   const [stocks, setStocks] = useState<ScreenerRecord[]>([])
@@ -60,9 +100,9 @@ export default function Dashboard() {
   const [clientToday, setClientToday] = useState<Date | null>(null)
   const [marketStatus, setMarketStatus] = useState({ status: 'CLOSED', detail: 'After Hours', timeMsg: 'Opens 9:30 AM ET' })
 
-  // Filter States
-  const [selectedSignals, setSelectedSignals] = useState<string[]>([
-    'BUY / ACCUMULATE', 'SELL / EXIT', 'TRIM / TAKE PROFIT', 'KEEP / HOLD'
+  // Filter States - Configured with quantitative filters
+  const [selectedSignalKeys, setSelectedSignalKeys] = useState<string[]>([
+    'PULLBACK', 'BREAKDOWN', 'OVERBOUGHT', 'NEUTRAL'
   ])
   const [rsiRange, setRsiRange] = useState<[number, number]>([0, 100])
   const [trendFilter, setTrendFilter] = useState<'ALL' | 'BULLISH' | 'BEARISH'>('ALL')
@@ -259,9 +299,9 @@ export default function Dashboard() {
     updatePositions(positions.filter(p => p.id !== id))
   }
 
-  const toggleSignalFilter = (sig: string) => {
-    setSelectedSignals(prev => 
-      prev.includes(sig) ? prev.filter(s => s !== sig) : [...prev, sig]
+  const toggleSignalFilter = (tag: string) => {
+    setSelectedSignalKeys(prev => 
+      prev.includes(tag) ? prev.filter(s => s !== tag) : [...prev, tag]
     )
   }
 
@@ -290,7 +330,7 @@ export default function Dashboard() {
           sma_50: 34.50,
           sma_200: 33.00,
           sma_trend: 'Bullish',
-          rationale: 'Custom monitored security (On-Demand Added)'
+          rationale: 'Baseline technical regime'
         } as ScreenerRecord)
       }
     })
@@ -301,14 +341,17 @@ export default function Dashboard() {
     return allAvailableStocks.filter(s => !removedSymbols.includes(s.symbol))
   }, [allAvailableStocks, removedSymbols])
 
-  const buyCount = useMemo(() => activeMonitoredStocks.filter(s => s.signal === 'BUY / ACCUMULATE').length, [activeMonitoredStocks])
-  const sellCount = useMemo(() => activeMonitoredStocks.filter(s => s.signal === 'SELL / EXIT').length, [activeMonitoredStocks])
-  const trimCount = useMemo(() => activeMonitoredStocks.filter(s => s.signal === 'TRIM / TAKE PROFIT').length, [activeMonitoredStocks])
+  const buyCount = useMemo(() => activeMonitoredStocks.filter(s => s.signal?.includes('BUY') || s.signal?.includes('PULLBACK')).length, [activeMonitoredStocks])
+  const sellCount = useMemo(() => activeMonitoredStocks.filter(s => s.signal?.includes('SELL') || s.signal?.includes('BREAKDOWN')).length, [activeMonitoredStocks])
+  const trimCount = useMemo(() => activeMonitoredStocks.filter(s => s.signal?.includes('TRIM') || s.signal?.includes('OVERBOUGHT')).length, [activeMonitoredStocks])
+
+  const isDark = theme === 'dark'
 
   const filteredAndSortedStocks = useMemo(() => {
     return activeMonitoredStocks
       .filter(s => {
-        const matchesSignal = selectedSignals.includes(s.signal)
+        const cfg = getSignalConfig(s.signal, isDark)
+        const matchesSignal = selectedSignalKeys.includes(cfg.tag)
         const matchesSearch = s.symbol.toLowerCase().includes(searchQuery.toLowerCase()) || 
                               (s.company && s.company.toLowerCase().includes(searchQuery.toLowerCase()))
         const rsiVal = Number(s.rsi_14) || 50
@@ -333,7 +376,7 @@ export default function Dashboard() {
           ? String(valA).localeCompare(String(valB)) 
           : String(valB).localeCompare(String(valA))
       })
-  }, [activeMonitoredStocks, selectedSignals, searchQuery, rsiRange, trendFilter, sortField, sortOrder])
+  }, [activeMonitoredStocks, selectedSignalKeys, searchQuery, rsiRange, trendFilter, sortField, sortOrder, isDark])
 
   const autocompleteSuggestions = useMemo(() => {
     const query = marketSearchInput.trim().toUpperCase()
@@ -446,7 +489,6 @@ export default function Dashboard() {
   }, [activeStockDetail, allAvailableStocks])
 
   // Dynamic Theme Palette Class Mapping
-  const isDark = theme === 'dark'
   const themeBg = isDark ? 'bg-slate-950 text-slate-100' : 'bg-slate-50 text-slate-900'
   const themeCardBg = isDark ? 'bg-slate-900 border-slate-700' : 'bg-white border-slate-200'
   const themeSubHeaderBg = isDark ? 'bg-slate-900/95 border-slate-800' : 'bg-white/95 border-slate-200 shadow-xs'
@@ -464,12 +506,13 @@ export default function Dashboard() {
   if (selectedDetailStock) {
     const s = selectedDetailStock
     const cleanSym = s.symbol.replace('.TO', '')
-    const priceDiff = s.signal.includes('BUY') ? 0.85 : s.signal.includes('SELL') ? -1.45 : 0.20
+    const priceDiff = s.signal?.includes('BUY') ? 0.85 : s.signal?.includes('SELL') ? -1.45 : 0.20
     const pctDiff = ((priceDiff / s.price) * 100)
     const isPositive = priceDiff >= 0
     const isMonitored = activeMonitoredStocks.some(st => st.symbol === s.symbol)
     const tvTheme = isDark ? 'dark' : 'light'
     const tvToolbarBg = isDark ? '0f172a' : 'ffffff'
+    const sigCfg = getSignalConfig(s.signal, isDark)
 
     return (
       <div className={`min-h-screen ${themeBg} font-sans flex flex-col justify-between transition-colors`}>
@@ -513,15 +556,8 @@ export default function Dashboard() {
               <div>
                 <div className="flex items-center gap-3">
                   <h1 className={`text-4xl font-black ${themeTextColor} tracking-tight`}>{s.symbol}</h1>
-                  <Badge 
-                    className={
-                      s.signal.includes('BUY') ? 'bg-emerald-950 text-emerald-300 font-bold border-emerald-600 text-xs px-2.5 py-0.5' :
-                      s.signal.includes('SELL') ? 'bg-rose-950 text-rose-300 font-bold border-rose-600 text-xs px-2.5 py-0.5' :
-                      s.signal.includes('TRIM') ? 'bg-amber-950 text-amber-300 font-bold border-amber-600 text-xs px-2.5 py-0.5' :
-                      `${isDark ? 'text-slate-200 bg-slate-800 border-slate-600' : 'text-slate-700 bg-slate-100 border-slate-300'} text-xs px-2.5 py-0.5`
-                    }
-                  >
-                    {s.signal}
+                  <Badge className={`${sigCfg.badgeClass} text-xs px-2.5 py-0.5`}>
+                    {sigCfg.label}
                   </Badge>
                 </div>
                 <p className={`text-base font-semibold ${themeMutedColor} mt-1`}>{s.company}</p>
@@ -644,7 +680,7 @@ export default function Dashboard() {
             <div className={`p-6 rounded-2xl border ${themeBorder} ${isDark ? 'bg-slate-900/90' : 'bg-white shadow-xs'} space-y-4`}>
               <h3 className={`text-xs font-bold uppercase tracking-wider ${themeTextColor}`}>About {s.symbol}</h3>
               <p className={`text-xs ${themeMutedColor} leading-relaxed font-normal`}>
-                {s.company} is listed on the Toronto Stock Exchange. The security is actively evaluated within TrendNorth&apos;s technical momentum matrix.
+                {s.company} is listed on the Toronto Stock Exchange. The security is actively evaluated within TrendNorth&apos;s quantitative momentum matrix for educational and technical research.
               </p>
               
               <div className={`flex flex-wrap gap-2 pt-3 border-t ${isDark ? 'border-slate-800' : 'border-slate-100'} text-xs`}>
@@ -683,10 +719,40 @@ export default function Dashboard() {
           </main>
         </div>
 
-        <footer className={`py-6 border-t ${isDark ? 'border-slate-800 bg-slate-950 text-slate-400' : 'border-slate-200 bg-white text-slate-500'} text-center text-xs font-medium`}>
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 flex flex-col sm:flex-row items-center justify-between gap-2">
-            <span>TrendNorth Terminal © {clientYear || '2026'} — Canadian Equities Technical Intelligence</span>
-            <span>Educational Research Only • Not Financial Advice</span>
+        {/* REGULATORY COMPLIANCE FOOTER */}
+        <footer className={`py-10 border-t ${isDark ? 'border-slate-800 bg-slate-950 text-slate-400' : 'border-slate-200 bg-slate-100/70 text-slate-500'} text-xs font-medium`}>
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 space-y-6">
+            <div className="flex flex-col md:flex-row md:items-start justify-between gap-6">
+              <div className="max-w-2xl space-y-2">
+                <div className="flex items-center gap-2">
+                  <ShieldAlert className="h-4 w-4 text-amber-500" />
+                  <span className={`font-bold ${themeTextColor}`}>Regulatory & Investment Disclaimer</span>
+                  <span className="rounded bg-slate-200 dark:bg-slate-800 px-2 py-0.5 text-[10px] font-bold text-slate-700 dark:text-slate-300">
+                    Educational Research Only
+                  </span>
+                </div>
+                <p className="leading-relaxed text-[11px]">
+                  TrendNorth is an algorithmic market research and technical screening tool designed exclusively for educational purposes. <strong>TrendNorth is not registered as an investment adviser, portfolio manager, or broker-dealer</strong> with the Ontario Securities Commission (OSC), the Canadian Investment Regulatory Organization (CIRO), the U.S. SEC, or any other financial regulatory agency.
+                </p>
+                <p className="leading-relaxed text-[11px]">
+                  Technical conditions (such as <em>Oversold Pullback</em>, <em>Trend Breakdown</em>, and <em>Momentum Overextended</em>) represent programmatic calculations derived from mathematical models (14-day RSI, 50-day SMA, 200-day SMA) applied to delayed market data. <strong>These mathematical outputs do not constitute investment advice, financial planning, or a recommendation to purchase or sell any security.</strong>
+                </p>
+              </div>
+
+              <div className="max-w-md space-y-2 text-[11px]">
+                <p className="leading-relaxed">
+                  <strong>Risk of Capital Loss:</strong> Trading Canadian equities involves substantial financial risk, including the loss of principal. Past technical patterns, historical moving average alignments, and mathematical indicators provide no guarantee of future price performance.
+                </p>
+                <p className="text-slate-500 dark:text-slate-400">
+                  Market prices are delayed and retrieved via public endpoints on an "as-is" basis. Always consult an independent, licensed financial advisor before making investment decisions.
+                </p>
+              </div>
+            </div>
+
+            <div className="pt-4 border-t border-slate-200/60 dark:border-slate-800/60 flex flex-col sm:flex-row items-center justify-between gap-2 text-[11px]">
+              <span>TrendNorth Terminal © {clientYear || '2026'} — TSX Quantitative Intelligence</span>
+              <span>Self-Directed Research Architecture</span>
+            </div>
           </div>
         </footer>
       </div>
@@ -787,7 +853,7 @@ export default function Dashboard() {
                   value="screener" 
                   className={`font-bold text-xs sm:text-sm data-[state=active]:bg-sky-600 data-[state=active]:text-white ${isDark ? 'text-slate-300 hover:text-white' : 'text-slate-700 hover:text-slate-900'}`}
                 >
-                  📋 Filtered Watchlist ({filteredAndSortedStocks.length}/{activeMonitoredStocks.length})
+                  📋 Quantitative Watchlist ({filteredAndSortedStocks.length}/{activeMonitoredStocks.length})
                 </TabsTrigger>
                 <TabsTrigger 
                   value="pocket" 
@@ -805,7 +871,7 @@ export default function Dashboard() {
                   value="manual" 
                   className={`font-bold text-xs sm:text-sm data-[state=active]:bg-sky-600 data-[state=active]:text-white ${isDark ? 'text-slate-300 hover:text-white' : 'text-slate-700 hover:text-slate-900'}`}
                 >
-                  📖 User Manual
+                  📖 Methodology & Manual
                 </TabsTrigger>
               </TabsList>
 
@@ -898,11 +964,11 @@ export default function Dashboard() {
                 </div>
               )}
 
-              {/* METRIC TILES */}
+              {/* METRIC TILES - REFACTORED TO STATISTICAL REGIMES */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <Card className={`${themeCardBg} shadow-xs`}>
                   <CardContent className="p-4">
-                    <p className={`text-xs font-bold uppercase tracking-wider ${themeMutedColor}`}>Watchlist Universe</p>
+                    <p className={`text-xs font-bold uppercase tracking-wider ${themeMutedColor}`}>Monitored Universe</p>
                     <p className={`text-3xl font-black mt-1 ${themeTextColor}`}>{activeMonitoredStocks.length}</p>
                     <p className={`text-xs font-semibold mt-1 ${themeMutedColor}`}>
                       {customSymbols.length > 0 ? `+${customSymbols.length} custom tracked` : 'Active TSX Monitored'}
@@ -913,30 +979,30 @@ export default function Dashboard() {
                 <Card className={`${isDark ? 'bg-slate-900 border-emerald-600/80' : 'bg-white border-emerald-300'} shadow-xs`}>
                   <CardContent className="p-4">
                     <p className="text-xs font-bold uppercase tracking-wider text-emerald-500 flex items-center gap-1.5">
-                      <span className="h-2.5 w-2.5 rounded-full bg-emerald-500" /> BUY / Dip
+                      <span className="h-2.5 w-2.5 rounded-full bg-emerald-500" /> Oversold Pullbacks
                     </p>
                     <p className="text-3xl font-black text-emerald-500 mt-1">{buyCount}</p>
-                    <p className="text-xs font-semibold text-emerald-600 mt-1">Oversold Uptrend Pullbacks</p>
+                    <p className="text-xs font-semibold text-emerald-600 mt-1">Uptrend Pullback (RSI ≤ 40)</p>
                   </CardContent>
                 </Card>
 
                 <Card className={`${isDark ? 'bg-slate-900 border-rose-600/80' : 'bg-white border-rose-300'} shadow-xs`}>
                   <CardContent className="p-4">
                     <p className="text-xs font-bold uppercase tracking-wider text-rose-500 flex items-center gap-1.5">
-                      <span className="h-2.5 w-2.5 rounded-full bg-rose-500" /> SELL / Exit
+                      <span className="h-2.5 w-2.5 rounded-full bg-rose-500" /> Trend Breakdown
                     </p>
                     <p className="text-3xl font-black text-rose-500 mt-1">{sellCount}</p>
-                    <p className="text-xs font-semibold text-rose-600 mt-1">Death Cross Structural Break</p>
+                    <p className="text-xs font-semibold text-rose-600 mt-1">Death Cross (50D &lt; 200D)</p>
                   </CardContent>
                 </Card>
 
                 <Card className={`${isDark ? 'bg-slate-900 border-amber-600/80' : 'bg-white border-amber-300'} shadow-xs`}>
                   <CardContent className="p-4">
                     <p className="text-xs font-bold uppercase tracking-wider text-amber-500 flex items-center gap-1.5">
-                      <span className="h-2.5 w-2.5 rounded-full bg-amber-500" /> TRIM / Overbought
+                      <span className="h-2.5 w-2.5 rounded-full bg-amber-500" /> Overextended
                     </p>
                     <p className="text-3xl font-black text-amber-500 mt-1">{trimCount}</p>
-                    <p className="text-xs font-semibold text-amber-600 mt-1">Extended 14D RSI &gt; 70</p>
+                    <p className="text-xs font-semibold text-amber-600 mt-1">Extended RSI ≥ 75.0</p>
                   </CardContent>
                 </Card>
               </div>
@@ -957,22 +1023,22 @@ export default function Dashboard() {
 
                   <div className="flex flex-wrap items-center gap-2">
                     {[
-                      { label: 'BUY / ACCUMULATE', short: 'BUY', activeBg: isDark ? 'bg-emerald-950 text-emerald-300 border-emerald-500 ring-1 ring-emerald-500' : 'bg-emerald-100 text-emerald-800 border-emerald-400 ring-1 ring-emerald-500' },
-                      { label: 'SELL / EXIT', short: 'SELL', activeBg: isDark ? 'bg-rose-950 text-rose-300 border-rose-500 ring-1 ring-rose-500' : 'bg-rose-100 text-rose-800 border-rose-400 ring-1 ring-rose-500' },
-                      { label: 'TRIM / TAKE PROFIT', short: 'TRIM', activeBg: isDark ? 'bg-amber-950 text-amber-300 border-amber-500 ring-1 ring-amber-500' : 'bg-amber-100 text-amber-800 border-amber-400 ring-1 ring-amber-500' },
-                      { label: 'KEEP / HOLD', short: 'HOLD', activeBg: isDark ? 'bg-slate-800 text-slate-100 border-slate-500 ring-1 ring-slate-400' : 'bg-slate-200 text-slate-800 border-slate-400 ring-1 ring-slate-400' },
+                      { tag: 'PULLBACK', label: 'Pullback', activeBg: isDark ? 'bg-emerald-950 text-emerald-300 border-emerald-500 ring-1 ring-emerald-500' : 'bg-emerald-100 text-emerald-800 border-emerald-400 ring-1 ring-emerald-500' },
+                      { tag: 'BREAKDOWN', label: 'Breakdown', activeBg: isDark ? 'bg-rose-950 text-rose-300 border-rose-500 ring-1 ring-rose-500' : 'bg-rose-100 text-rose-800 border-rose-400 ring-1 ring-rose-500' },
+                      { tag: 'OVERBOUGHT', label: 'Overextended', activeBg: isDark ? 'bg-amber-950 text-amber-300 border-amber-500 ring-1 ring-amber-500' : 'bg-amber-100 text-amber-800 border-amber-400 ring-1 ring-amber-500' },
+                      { tag: 'NEUTRAL', label: 'In Range', activeBg: isDark ? 'bg-slate-800 text-slate-100 border-slate-500 ring-1 ring-slate-400' : 'bg-slate-200 text-slate-800 border-slate-400 ring-1 ring-slate-400' },
                     ].map(sig => {
-                      const active = selectedSignals.includes(sig.label)
+                      const active = selectedSignalKeys.includes(sig.tag)
                       return (
                         <button
-                          key={sig.label}
+                          key={sig.tag}
                           type="button"
-                          onClick={() => toggleSignalFilter(sig.label)}
+                          onClick={() => toggleSignalFilter(sig.tag)}
                           className={`text-xs font-bold px-3 py-1.5 rounded-xl border transition-all cursor-pointer flex items-center gap-1.5 ${
                             active ? sig.activeBg : `${isDark ? 'bg-slate-950 text-slate-400 border-slate-700 hover:text-white' : 'bg-slate-50 text-slate-600 border-slate-200 hover:text-slate-900'}`
                           }`}
                         >
-                          {sig.short}
+                          {sig.label}
                           {active && <Check className="h-3.5 w-3.5" />}
                         </button>
                       )
@@ -1048,7 +1114,7 @@ export default function Dashboard() {
                         variant="ghost"
                         size="sm"
                         onClick={() => {
-                          setSelectedSignals(['BUY / ACCUMULATE', 'SELL / EXIT', 'TRIM / TAKE PROFIT', 'KEEP / HOLD'])
+                          setSelectedSignalKeys(['PULLBACK', 'BREAKDOWN', 'OVERBOUGHT', 'NEUTRAL'])
                           setRsiRange([0, 100])
                           setTrendFilter('ALL')
                           setSearchQuery('')
@@ -1078,7 +1144,11 @@ export default function Dashboard() {
                             Price (CAD) <ArrowUpDown className="h-3.5 w-3.5 text-slate-400" />
                           </div>
                         </th>
-                        <th className="px-4 py-3.5">Signal</th>
+                        <th className="px-4 py-3.5">
+                          <div className="flex items-center gap-1">
+                            Model Condition <Info className="h-3 w-3 text-slate-400" />
+                          </div>
+                        </th>
                         <th className="px-4 py-3.5 cursor-pointer hover:text-sky-500" onClick={() => handleSort('rsi_14')}>
                           <div className="flex items-center gap-1.5">
                             14D RSI <ArrowUpDown className="h-3.5 w-3.5 text-slate-400" />
@@ -1094,7 +1164,7 @@ export default function Dashboard() {
                             200D SMA <ArrowUpDown className="h-3.5 w-3.5 text-slate-400" />
                           </div>
                         </th>
-                        <th className="px-5 py-3.5">Rationale</th>
+                        <th className="px-5 py-3.5">Condition Rationale</th>
                         <th className="px-4 py-3.5 text-right">Actions</th>
                       </tr>
                     </thead>
@@ -1108,6 +1178,7 @@ export default function Dashboard() {
                       ) : (
                         filteredAndSortedStocks.map((stock) => {
                           const heldShares = holdingsMap.get(stock.symbol)
+                          const sigCfg = getSignalConfig(stock.signal, isDark)
                           return (
                             <tr 
                               key={stock.symbol} 
@@ -1143,14 +1214,9 @@ export default function Dashboard() {
                               <td className="px-4 py-3.5">
                                 <Badge 
                                   variant="secondary"
-                                  className={
-                                    stock.signal.includes('BUY') ? 'bg-emerald-950 text-emerald-300 font-extrabold border-emerald-600' :
-                                    stock.signal.includes('SELL') ? 'bg-rose-950 text-rose-300 font-extrabold border-rose-600' :
-                                    stock.signal.includes('TRIM') ? 'bg-amber-950 text-amber-300 font-extrabold border-amber-600' :
-                                    `${isDark ? 'text-slate-100 bg-slate-800 border-slate-600' : 'text-slate-700 bg-slate-200 border-slate-300'} font-bold`
-                                  }
+                                  className={sigCfg.badgeClass}
                                 >
-                                  {stock.signal}
+                                  {sigCfg.label}
                                 </Badge>
                               </td>
 
@@ -1208,7 +1274,7 @@ export default function Dashboard() {
               <div className={`flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-4 rounded-2xl border shadow-xs ${themeCardBg}`}>
                 <div>
                   <h2 className={`text-base font-bold ${themeTextColor}`}>Pocket Trader Portfolio Tracker</h2>
-                  <p className={`text-xs ${themeMutedColor}`}>Live P&L calculations and profit target monitoring against TSX scans.</p>
+                  <p className={`text-xs ${themeMutedColor}`}>Self-directed paper trading calculations and target monitoring against TSX scans.</p>
                 </div>
 
                 <div className="flex items-center gap-2">
@@ -1228,6 +1294,14 @@ export default function Dashboard() {
                   >
                     <Plus className="h-4 w-4" /> Add Position
                   </Button>
+                </div>
+              </div>
+
+              {/* POCKET TRADER COMPLIANCE NOTICE */}
+              <div className={`p-3.5 rounded-xl border text-xs leading-relaxed flex items-start gap-2.5 ${isDark ? 'bg-slate-900/60 border-slate-800 text-slate-400' : 'bg-slate-100/90 border-slate-200 text-slate-600'}`}>
+                <Info className="h-4 w-4 text-sky-500 shrink-0 mt-0.5" />
+                <div>
+                  <strong className={themeTextColor}>Self-Directed Simulated Ledger:</strong> Pocket Trader is an informational calculation tool for tracking personal hypothetical targets. TrendNorth does not provide investment management, execute trades, hold deposits, or act as an intermediary. All gain/loss calculations are based on delayed market quotes and are for personal bookkeeping purposes only.
                 </div>
               </div>
 
@@ -1282,65 +1356,68 @@ export default function Dashboard() {
                           <th className="px-4 py-3.5">Current Price</th>
                           <th className="px-4 py-3.5">Unrealized P&L</th>
                           <th className="px-4 py-3.5">Target Status</th>
-                          <th className="px-4 py-3.5">Engine Signal</th>
+                          <th className="px-4 py-3.5">Model Condition</th>
                           <th className="px-4 py-3.5 text-right">Action</th>
                         </tr>
                       </thead>
                       <tbody className={`divide-y ${isDark ? 'divide-slate-800' : 'divide-slate-200'}`}>
-                        {calculatedPositions.map((pos) => (
-                          <tr key={pos.id} className={`${themeTableRowHover} transition-colors`}>
-                            <td className="px-5 py-3.5 font-bold cursor-pointer" onClick={() => setActiveStockDetail(pos.symbol)}>
-                              <span className="text-sky-500 hover:underline text-base font-extrabold">{pos.symbol}</span>
-                              <div className={`text-xs font-medium ${themeMutedColor}`}>{pos.company} ({pos.shares} shs)</div>
-                            </td>
-                            <td className={`px-4 py-3.5 font-mono ${themeMutedColor}`}>
-                              <div className={`font-bold ${themeTextColor}`}>${pos.buyPrice.toFixed(2)}</div>
-                              <div className="text-xs">{pos.buyDate} ({pos.daysHeld}d)</div>
-                            </td>
-                            <td className={`px-4 py-3.5 font-black font-mono text-base ${themeTextColor}`}>
-                              ${pos.currentPrice.toFixed(2)}
-                            </td>
-                            <td className="px-4 py-3.5 font-mono">
-                              <div className={`font-black text-base ${pos.dollarPnl >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
-                                {pos.dollarPnl >= 0 ? '+' : ''}${pos.dollarPnl.toFixed(2)}
-                              </div>
-                              <div className={`text-xs font-bold ${pos.pctPnl >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
-                                {pos.pctPnl >= 0 ? '+' : ''}{pos.pctPnl.toFixed(2)}%
-                              </div>
-                            </td>
-                            <td className="px-4 py-3.5">
-                              {pos.isTargetReached ? (
-                                <Badge className="bg-emerald-950 text-emerald-300 border-emerald-600 font-extrabold gap-1">
-                                  <Target className="h-3.5 w-3.5" /> 🎯 TARGET REACHED (${pos.targetPrice.toFixed(2)})
-                                </Badge>
-                              ) : (
-                                <div className="space-y-1">
-                                  <div className={`text-xs font-mono font-bold ${themeTextColor}`}>
-                                    ${pos.currentPrice.toFixed(2)} / ${pos.targetPrice.toFixed(2)} ({pos.targetProgress.toFixed(0)}%)
-                                  </div>
-                                  <div className={`w-28 h-2 rounded-full overflow-hidden ${isDark ? 'bg-slate-800' : 'bg-slate-200'}`}>
-                                    <div className="bg-sky-500 h-full rounded-full" style={{ width: `${pos.targetProgress}%` }} />
-                                  </div>
+                        {calculatedPositions.map((pos) => {
+                          const sigCfg = getSignalConfig(pos.signal, isDark)
+                          return (
+                            <tr key={pos.id} className={`${themeTableRowHover} transition-colors`}>
+                              <td className="px-5 py-3.5 font-bold cursor-pointer" onClick={() => setActiveStockDetail(pos.symbol)}>
+                                <span className="text-sky-500 hover:underline text-base font-extrabold">{pos.symbol}</span>
+                                <div className={`text-xs font-medium ${themeMutedColor}`}>{pos.company} ({pos.shares} shs)</div>
+                              </td>
+                              <td className={`px-4 py-3.5 font-mono ${themeMutedColor}`}>
+                                <div className={`font-bold ${themeTextColor}`}>${pos.buyPrice.toFixed(2)}</div>
+                                <div className="text-xs">{pos.buyDate} ({pos.daysHeld}d)</div>
+                              </td>
+                              <td className={`px-4 py-3.5 font-black font-mono text-base ${themeTextColor}`}>
+                                ${pos.currentPrice.toFixed(2)}
+                              </td>
+                              <td className="px-4 py-3.5 font-mono">
+                                <div className={`font-black text-base ${pos.dollarPnl >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
+                                  {pos.dollarPnl >= 0 ? '+' : ''}${pos.dollarPnl.toFixed(2)}
                                 </div>
-                              )}
-                            </td>
-                            <td className="px-4 py-3.5">
-                              <Badge variant="outline" className={`text-xs font-bold border ${isDark ? 'text-slate-100 bg-slate-800 border-slate-600' : 'text-slate-800 bg-slate-200 border-slate-300'}`}>
-                                {pos.signal}
-                              </Badge>
-                            </td>
-                            <td className="px-4 py-3.5 text-right">
-                              <Button 
-                                variant="ghost" 
-                                size="sm" 
-                                onClick={() => handleRemovePosition(pos.id)} 
-                                className="text-slate-400 hover:text-rose-500 h-8 w-8 p-0 cursor-pointer"
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            </td>
-                          </tr>
-                        ))}
+                                <div className={`text-xs font-bold ${pos.pctPnl >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                                  {pos.pctPnl >= 0 ? '+' : ''}{pos.pctPnl.toFixed(2)}%
+                                </div>
+                              </td>
+                              <td className="px-4 py-3.5">
+                                {pos.isTargetReached ? (
+                                  <Badge className="bg-emerald-950 text-emerald-300 border-emerald-600 font-extrabold gap-1">
+                                    <Target className="h-3.5 w-3.5" /> 🎯 TARGET REACHED (${pos.targetPrice.toFixed(2)})
+                                  </Badge>
+                                ) : (
+                                  <div className="space-y-1">
+                                    <div className={`text-xs font-mono font-bold ${themeTextColor}`}>
+                                      ${pos.currentPrice.toFixed(2)} / ${pos.targetPrice.toFixed(2)} ({pos.targetProgress.toFixed(0)}%)
+                                    </div>
+                                    <div className={`w-28 h-2 rounded-full overflow-hidden ${isDark ? 'bg-slate-800' : 'bg-slate-200'}`}>
+                                      <div className="bg-sky-500 h-full rounded-full" style={{ width: `${pos.targetProgress}%` }} />
+                                    </div>
+                                  </div>
+                                )}
+                              </td>
+                              <td className="px-4 py-3.5">
+                                <Badge variant="outline" className={sigCfg.badgeClass}>
+                                  {sigCfg.label}
+                                </Badge>
+                              </td>
+                              <td className="px-4 py-3.5 text-right">
+                                <Button 
+                                  variant="ghost" 
+                                  size="sm" 
+                                  onClick={() => handleRemovePosition(pos.id)} 
+                                  className="text-slate-400 hover:text-rose-500 h-8 w-8 p-0 cursor-pointer"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </td>
+                            </tr>
+                          )
+                        })}
                       </tbody>
                     </table>
                   </div>
@@ -1353,7 +1430,7 @@ export default function Dashboard() {
               <div className={`p-6 rounded-2xl border shadow-xl ${themeCardBg}`}>
                 <div className="flex items-center gap-2 mb-4">
                   <BarChart3 className="h-5 w-5 text-sky-500" />
-                  <h3 className={`font-bold text-base ${themeTextColor}`}>TSX Momentum & Distribution Matrix</h3>
+                  <h3 className={`font-bold text-base ${themeTextColor}`}>TSX Momentum & Moving Average Spreads</h3>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div className={`p-5 rounded-xl border ${isDark ? 'bg-slate-800/80 border-emerald-600/80' : 'bg-emerald-50 border-emerald-200'}`}>
@@ -1371,7 +1448,7 @@ export default function Dashboard() {
                     <p className={`text-xs font-medium mt-1 ${themeMutedColor}`}>SMA 50 &lt; SMA 200</p>
                   </div>
                   <div className={`p-5 rounded-xl border ${isDark ? 'bg-slate-800/80 border-sky-600/80' : 'bg-sky-50 border-sky-200'}`}>
-                    <p className="text-xs font-extrabold text-sky-500 uppercase">Oversold Setups</p>
+                    <p className="text-xs font-extrabold text-sky-500 uppercase">Oversold Conditions</p>
                     <p className={`text-3xl font-black mt-1 ${themeTextColor}`}>
                       {activeMonitoredStocks.filter(s => Number(s.rsi_14) <= 40).length}
                     </p>
@@ -1393,7 +1470,7 @@ export default function Dashboard() {
                       TrendNorth Operational & Technical Manual
                     </h2>
                     <p className={`text-xs ${themeMutedColor} mt-0.5`}>
-                      Algorithmic rules, signal matrix, cloud scheduling, and trade tracking procedures.
+                      Quantitative models, indicator conditions, cloud scheduling, and self-directed tracking procedures.
                     </p>
                   </div>
                 </div>
@@ -1404,30 +1481,30 @@ export default function Dashboard() {
                     Platform Scope & Core Universe
                   </h3>
                   <p className={`text-xs sm:text-sm leading-relaxed font-normal pl-8 ${themeMutedColor}`}>
-                    TrendNorth is an automated quantitative screening terminal monitoring high-liquidity Canadian equities and benchmark ETFs listed on the Toronto Stock Exchange (TSX). The engine continuously evaluates momentum and multi-timeframe moving average spreads to identify high-probability swing trade inflection points while removing emotional biases such as FOMO or panic selling.
+                    TrendNorth is an automated quantitative screening terminal monitoring high-liquidity Canadian equities and benchmark ETFs listed on the Toronto Stock Exchange (TSX). The engine continuously evaluates momentum and multi-timeframe moving average spreads to identify statistical inflection points while removing subjective emotional bias.
                   </p>
                 </div>
 
                 <div className="space-y-3">
                   <h3 className="text-sm font-extrabold uppercase tracking-wider text-sky-500 flex items-center gap-2">
                     <span className="text-xs px-2 py-0.5 rounded bg-sky-500/10 border border-sky-500/30 text-sky-500">02</span>
-                    Indicator & Signal Classification Matrix
+                    Quantitative Indicator Matrix & Technical Regimes
                   </h3>
                   <div className="pl-0 sm:pl-8 overflow-x-auto">
                     <table className={`w-full text-left text-xs border rounded-xl overflow-hidden divide-y ${themeBorder} ${isDark ? 'divide-slate-800' : 'divide-slate-200'}`}>
                       <thead className={`font-bold uppercase tracking-wider ${themeTableHead}`}>
                         <tr>
-                          <th className="px-4 py-3">Signal</th>
-                          <th className="px-4 py-3">Quantitative Condition</th>
-                          <th className="px-4 py-3">System Rationale</th>
-                          <th className="px-4 py-3">Trading Interpretation</th>
+                          <th className="px-4 py-3">Technical Regime</th>
+                          <th className="px-4 py-3">Mathematical Condition</th>
+                          <th className="px-4 py-3">Statistical Rationale</th>
+                          <th className="px-4 py-3">Market Context</th>
                         </tr>
                       </thead>
                       <tbody className={`divide-y font-medium ${isDark ? 'bg-slate-900/60 divide-slate-800 text-slate-200' : 'bg-white divide-slate-200 text-slate-800'}`}>
                         <tr>
                           <td className="px-4 py-3">
                             <Badge className="bg-emerald-950 text-emerald-300 border-emerald-600 font-bold">
-                              BUY / ACCUMULATE
+                              Oversold Pullback
                             </Badge>
                           </td>
                           <td className="px-4 py-3 font-mono text-sky-500 font-bold">
@@ -1437,13 +1514,13 @@ export default function Dashboard() {
                             Bullish trend + Pullback dip
                           </td>
                           <td className={`px-4 py-3 ${themeMutedColor}`}>
-                            Macro structural uptrend is intact, but near-term selling pressure has dragged the momentum oscillator into value/discount territory.
+                            Macro structural uptrend is intact, but near-term selling pressure has dragged the momentum oscillator into discount territory.
                           </td>
                         </tr>
                         <tr>
                           <td className="px-4 py-3">
                             <Badge className="bg-rose-950 text-rose-300 border-rose-600 font-bold">
-                              SELL / EXIT
+                              Trend Breakdown
                             </Badge>
                           </td>
                           <td className="px-4 py-3 font-mono text-rose-500 font-bold">
@@ -1459,14 +1536,14 @@ export default function Dashboard() {
                         <tr>
                           <td className="px-4 py-3">
                             <Badge className="bg-amber-950 text-amber-300 border-amber-600 font-bold">
-                              TRIM / TAKE PROFIT
+                              Momentum Overextended
                             </Badge>
                           </td>
                           <td className="px-4 py-3 font-mono text-amber-500 font-bold">
                             RSI_14 ≥ 75.0
                           </td>
                           <td className="px-4 py-3 text-amber-500 font-bold">
-                            Overextended momentum
+                            Velocity Exhaustion
                           </td>
                           <td className={`px-4 py-3 ${themeMutedColor}`}>
                             Price momentum has reached acute overbought levels; elevated statistical probability of near-term consolidation or mean reversion.
@@ -1475,14 +1552,14 @@ export default function Dashboard() {
                         <tr>
                           <td className="px-4 py-3">
                             <Badge className="bg-slate-800 text-slate-300 border-slate-600 font-bold">
-                              KEEP / HOLD
+                              Neutral / Baseline
                             </Badge>
                           </td>
                           <td className={`px-4 py-3 font-mono ${themeMutedColor}`}>
                             Baseline Parameters
                           </td>
                           <td className={`px-4 py-3 ${themeMutedColor}`}>
-                            Trading within baseline
+                            Standard Range
                           </td>
                           <td className={`px-4 py-3 ${themeMutedColor}`}>
                             Asset price and momentum oscillate within standard historical variance without triggering edge thresholds.
@@ -1546,10 +1623,40 @@ export default function Dashboard() {
         </main>
       </div>
 
-      <footer className={`mt-12 py-6 border-t ${isDark ? 'border-slate-800 bg-slate-950 text-slate-400' : 'border-slate-200 bg-white text-slate-500'} text-center text-xs font-medium`}>
-        <div className="w-full px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-2">
-          <span>TrendNorth Terminal © {clientYear || '2026'} — Canadian Equities Technical Intelligence</span>
-          <span>Educational & Algorithmic Research Only • Not Financial Advice</span>
+      {/* REGULATORY COMPLIANCE FOOTER */}
+      <footer className={`mt-12 py-10 border-t ${isDark ? 'border-slate-800 bg-slate-950 text-slate-400' : 'border-slate-200 bg-slate-100/70 text-slate-500'} text-xs font-medium`}>
+        <div className="w-full px-6 lg:px-8 space-y-6">
+          <div className="flex flex-col md:flex-row md:items-start justify-between gap-6">
+            <div className="max-w-2xl space-y-2">
+              <div className="flex items-center gap-2">
+                <ShieldAlert className="h-4 w-4 text-amber-500" />
+                <span className={`font-bold ${themeTextColor}`}>Regulatory & Investment Disclaimer</span>
+                <span className="rounded bg-slate-200 dark:bg-slate-800 px-2 py-0.5 text-[10px] font-bold text-slate-700 dark:text-slate-300">
+                  Educational Research Only
+                </span>
+              </div>
+              <p className="leading-relaxed text-[11px]">
+                TrendNorth is an algorithmic market research and technical screening tool designed exclusively for educational purposes. <strong>TrendNorth is not registered as an investment adviser, portfolio manager, or broker-dealer</strong> with the Ontario Securities Commission (OSC), the Canadian Investment Regulatory Organization (CIRO), the U.S. SEC, or any other financial regulatory agency.
+              </p>
+              <p className="leading-relaxed text-[11px]">
+                Technical conditions (such as <em>Oversold Pullback</em>, <em>Trend Breakdown</em>, and <em>Momentum Overextended</em>) represent programmatic calculations derived from mathematical models (14-day RSI, 50-day SMA, 200-day SMA) applied to delayed market data. <strong>These mathematical outputs do not constitute investment advice, financial planning, or a recommendation to purchase or sell any security.</strong>
+              </p>
+            </div>
+
+            <div className="max-w-md space-y-2 text-[11px]">
+              <p className="leading-relaxed">
+                <strong>Risk of Capital Loss:</strong> Trading Canadian equities involves substantial financial risk, including the loss of principal. Past technical patterns, historical moving average alignments, and mathematical indicators provide no guarantee of future price performance.
+              </p>
+              <p className="text-slate-500 dark:text-slate-400">
+                Market prices are delayed and retrieved via public endpoints on an "as-is" basis. Always consult an independent, licensed financial advisor before making investment decisions.
+              </p>
+            </div>
+          </div>
+
+          <div className="pt-4 border-t border-slate-200/60 dark:border-slate-800/60 flex flex-col sm:flex-row items-center justify-between gap-2 text-[11px]">
+            <span>TrendNorth Terminal © {clientYear || '2026'} — TSX Quantitative Intelligence</span>
+            <span>Self-Directed Research Architecture</span>
+          </div>
         </div>
       </footer>
 
@@ -1562,8 +1669,14 @@ export default function Dashboard() {
               Type or select any TSX or custom symbol. Target achievements and P&L compute automatically.
             </SheetDescription>
           </SheetHeader>
+
+          {/* INLINE DRAWER COMPLIANCE NOTICE */}
+          <div className="mt-3 p-3 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/60 text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed flex items-start gap-2">
+            <Info className="h-3.5 w-3.5 text-sky-500 shrink-0 mt-0.5" />
+            <span>This is a simulated paper-trading tool. Entries are saved locally to your browser and do not route or execute real-world financial transactions.</span>
+          </div>
+
           <form onSubmit={handleAddPosition} className="space-y-4 pt-4">
-            
             <div className="space-y-1.5 relative" ref={sheetSearchRef}>
               <Label htmlFor="stockSearch" className={`text-xs font-bold ${themeTextColor}`}>
                 TSX Ticker or Company Name
