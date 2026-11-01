@@ -16,7 +16,7 @@ import {
   ChevronRight, ArrowLeft, Building2, Globe, Users,
   Check, SlidersHorizontal, ChevronDown, RotateCcw,
   BookmarkPlus, BookmarkX, Briefcase, Sun, Moon,
-  ShieldAlert, Info
+  ShieldAlert, Info, MessageSquareText, X, Send
 } from 'lucide-react'
 
 interface PocketPosition {
@@ -127,6 +127,17 @@ export default function Dashboard() {
   const [newShares, setNewShares] = useState<string>('10')
   const [newTargetGain, setNewTargetGain] = useState<string>('10')
 
+  // Feedback Widget State
+  const [isFeedbackOpen, setIsFeedbackOpen] = useState(false)
+  const [fbName, setFbName] = useState('')
+  const [fbEmail, setFbEmail] = useState('')
+  const [fbTopic, setFbTopic] = useState('Feature Suggestion')
+  const [fbMessage, setFbMessage] = useState('')
+  const [fbHoneypot, setFbHoneypot] = useState('')
+  const [fbLoading, setFbLoading] = useState(false)
+  const [fbSuccess, setFbSuccess] = useState(false)
+  const [fbError, setFbError] = useState<string | null>(null)
+
   // 1. Fetch Supabase Data
   const fetchScanData = async () => {
     setLoading(true)
@@ -236,6 +247,43 @@ export default function Dashboard() {
     const nextTheme: ThemeMode = theme === 'dark' ? 'light' : 'dark'
     setTheme(nextTheme)
     localStorage.setItem('trendnorth_theme', nextTheme)
+  }
+
+  // Feedback Submission Handler
+  const handleFeedbackSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setFbLoading(true)
+    setFbError(null)
+
+    try {
+      const res = await fetch('/api/feedback', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: fbName,
+          email: fbEmail,
+          topic: fbTopic,
+          message: fbMessage,
+          honeypot: fbHoneypot,
+        }),
+      })
+
+      const data = await res.json()
+      if (!res.ok) {
+        setFbError(data.error || 'Failed to send feedback.')
+      } else {
+        setFbSuccess(true)
+        setTimeout(() => {
+          setIsFeedbackOpen(false)
+          setFbSuccess(false)
+          setFbMessage('')
+        }, 3000)
+      }
+    } catch (err) {
+      setFbError('Network error. Please try again.')
+    } finally {
+      setFbLoading(false)
+    }
   }
 
   // Watchlist Addition / Removal
@@ -964,7 +1012,7 @@ export default function Dashboard() {
                 </div>
               )}
 
-              {/* METRIC TILES - REFACTORED TO STATISTICAL REGIMES */}
+              {/* METRIC TILES */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <Card className={`${themeCardBg} shadow-xs`}>
                   <CardContent className="p-4">
@@ -1659,6 +1707,129 @@ export default function Dashboard() {
           </div>
         </div>
       </footer>
+
+      {/* FLOATING USER FEEDBACK WIDGET (BOTTOM-RIGHT ANCHORED) */}
+      <div className="fixed bottom-6 right-6 z-50">
+        {isFeedbackOpen ? (
+          <div className={`w-[340px] sm:w-[380px] p-5 rounded-2xl border shadow-2xl transition-all ${
+            isDark ? 'bg-slate-900 border-slate-700 text-white' : 'bg-white border-slate-200 text-slate-900'
+          }`}>
+            <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800">
+              <div className="flex items-center gap-2">
+                <MessageSquareText className="h-4 w-4 text-sky-500" />
+                <span className="text-sm font-bold">💬 Submit Feedback</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsFeedbackOpen(false)}
+                className="text-slate-400 hover:text-slate-600 dark:hover:text-white cursor-pointer"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            {fbSuccess ? (
+              <div className="py-8 text-center space-y-2">
+                <p className="text-2xl">✅</p>
+                <p className="text-sm font-bold text-emerald-500">Thank you!</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  Your feedback has been sent directly to the development team.
+                </p>
+              </div>
+            ) : (
+              <form onSubmit={handleFeedbackSubmit} className="space-y-3 pt-3">
+                {fbError && (
+                  <div className="p-2 rounded bg-rose-500/10 border border-rose-500/30 text-rose-500 text-[11px] font-semibold">
+                    {fbError}
+                  </div>
+                )}
+
+                {/* Honeypot field (hidden from bots) */}
+                <input
+                  type="text"
+                  className="hidden"
+                  tabIndex={-1}
+                  autoComplete="off"
+                  value={fbHoneypot}
+                  onChange={(e) => setFbHoneypot(e.target.value)}
+                />
+
+                <div>
+                  <Label className="text-[11px] font-bold">Your Name</Label>
+                  <Input
+                    type="text"
+                    placeholder="e.g. Alex"
+                    value={fbName}
+                    onChange={(e) => setFbName(e.target.value)}
+                    className={`h-8 text-xs mt-1 ${themeInputBg}`}
+                    required
+                  />
+                </div>
+
+                <div>
+                  <Label className="text-[11px] font-bold">Your Email</Label>
+                  <Input
+                    type="email"
+                    placeholder="name@domain.com"
+                    value={fbEmail}
+                    onChange={(e) => setFbEmail(e.target.value)}
+                    className={`h-8 text-xs mt-1 ${themeInputBg}`}
+                    required
+                  />
+                </div>
+
+                <div>
+                  <Label className="text-[11px] font-bold">Topic</Label>
+                  <select
+                    value={fbTopic}
+                    onChange={(e) => setFbTopic(e.target.value)}
+                    className={`w-full h-8 px-2 text-xs font-medium rounded-lg border mt-1 focus:ring-2 focus:ring-sky-500 ${
+                      isDark ? 'bg-slate-950 border-slate-700 text-white' : 'bg-white border-slate-300 text-slate-900'
+                    }`}
+                  >
+                    <option value="Feature Suggestion">Feature Suggestion 💡</option>
+                    <option value="Bug Report">Bug Report 🐞</option>
+                    <option value="Data Inaccuracy">Data Inaccuracy 📊</option>
+                    <option value="General Feedback">General Feedback 💬</option>
+                  </select>
+                </div>
+
+                <div>
+                  <Label className="text-[11px] font-bold">Comments</Label>
+                  <textarea
+                    rows={3}
+                    placeholder="Describe your suggestion or issue (at least 3 words)..."
+                    value={fbMessage}
+                    onChange={(e) => setFbMessage(e.target.value)}
+                    className={`w-full p-2 text-xs rounded-lg border mt-1 resize-none focus:outline-none focus:ring-2 focus:ring-sky-500 ${
+                      isDark ? 'bg-slate-950 border-slate-700 text-white' : 'bg-white border-slate-300 text-slate-900'
+                    }`}
+                    required
+                  />
+                </div>
+
+                <Button
+                  type="submit"
+                  disabled={fbLoading}
+                  className="w-full h-8 text-xs font-bold bg-sky-600 hover:bg-sky-500 text-white gap-1.5 cursor-pointer"
+                >
+                  <Send className="h-3 w-3" />
+                  {fbLoading ? 'Sending...' : 'Submit Feedback'}
+                </Button>
+              </form>
+            )}
+          </div>
+        ) : (
+          <Button
+            type="button"
+            onClick={() => setIsFeedbackOpen(true)}
+            className="shadow-xl bg-sky-600 hover:bg-sky-500 text-white font-bold text-xs gap-2 px-4 py-2.5 rounded-full cursor-pointer hover:scale-105 transition-transform"
+          >
+            <MessageSquareText className="h-4 w-4" />
+            <span>Submit Feedback</span>
+          </Button>
+        )}
+      </div>
 
       {/* POCKET TRADER DRAWER */}
       <Sheet open={isSheetOpen} onOpenChange={setIsSheetOpen}>
