@@ -202,15 +202,24 @@ export default function Dashboard() {
     }
   }
 
-  // Google OAuth Sign In
+  // Google OAuth Sign In with defensive try/catch
   const handleGoogleSignIn = async () => {
-    setAuthLoading(true)
-    await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
-      },
-    })
+    try {
+      setAuthLoading(true)
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: `${window.location.origin}/auth/callback`,
+        },
+      })
+      if (error) {
+        console.error('Sign-in error:', error.message)
+        setAuthLoading(false)
+      }
+    } catch (err) {
+      console.error('Sign-in exception:', err)
+      setAuthLoading(false)
+    }
   }
 
   // Sign Out
@@ -253,6 +262,12 @@ export default function Dashboard() {
     fetchScanData()
 
     const interval = setInterval(calculateMarketHours, 60000)
+
+    // Reset button lock if restored from browser back-forward cache (bfcache)
+    const handlePageShow = () => {
+      setAuthLoading(false)
+    }
+    window.addEventListener('pageshow', handlePageShow)
 
     const savedTheme = localStorage.getItem('trendnorth_theme') as ThemeMode
     if (savedTheme === 'light' || savedTheme === 'dark') {
@@ -301,6 +316,7 @@ export default function Dashboard() {
 
     return () => {
       clearInterval(interval)
+      window.removeEventListener('pageshow', handlePageShow)
       subscription.unsubscribe()
       document.removeEventListener('mousedown', handleClickOutside)
     }
