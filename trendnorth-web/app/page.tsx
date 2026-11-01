@@ -3,6 +3,7 @@
 import { useEffect, useState, useMemo, useRef } from 'react'
 import { supabase, ScreenerRecord } from '@/lib/supabase'
 import { EXTENDED_TSX_CATALOG } from '@/lib/catalog'
+import { User } from '@supabase/supabase-js'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -16,7 +17,8 @@ import {
   ChevronRight, ArrowLeft, Building2, Globe, Users,
   Check, SlidersHorizontal, ChevronDown, RotateCcw,
   BookmarkPlus, BookmarkX, Briefcase, Sun, Moon,
-  ShieldAlert, Info, MessageSquareText, X, Send
+  ShieldAlert, Info, MessageSquareText, X, Send,
+  LogOut, Cloud
 } from 'lucide-react'
 
 interface PocketPosition {
@@ -32,7 +34,6 @@ type SortField = 'symbol' | 'price' | 'rsi_14' | 'sma_50' | 'sma_200'
 type SortOrder = 'asc' | 'desc'
 type ThemeMode = 'dark' | 'light'
 
-// Helper function to resolve raw database signals into quantitative condition badges
 export function getSignalConfig(rawSignal: string, isDark: boolean) {
   const sig = (rawSignal || '').toUpperCase()
   if (sig.includes('BUY') || sig.includes('ACCUMULATE') || sig.includes('PULLBACK')) {
@@ -77,17 +78,21 @@ export default function Dashboard() {
   const [searchQuery, setSearchQuery] = useState('')
   const [lastScanTime, setLastScanTime] = useState<string | null>(null)
 
+  // Auth & Cloud Sync State
+  const [user, setUser] = useState<User | null>(null)
+  const [authLoading, setAuthLoading] = useState(false)
+
   // Theme Mode State
   const [theme, setTheme] = useState<ThemeMode>('dark')
 
-  // Active Tab State for programmatic tab switching
+  // Active Tab State
   const [activeTab, setActiveTab] = useState('screener')
 
-  // Watchlist Membership State (Custom Added & Manually Excluded)
+  // Watchlist Membership State
   const [removedSymbols, setRemovedSymbols] = useState<string[]>([])
   const [customSymbols, setCustomSymbols] = useState<string[]>([])
 
-  // Autocomplete Search State for "Open Market Data Details" (Top Bar)
+  // Autocomplete Search State
   const [marketSearchInput, setMarketSearchInput] = useState('')
   const [isAutocompleteOpen, setIsAutocompleteOpen] = useState(false)
   const autocompleteRef = useRef<HTMLDivElement>(null)
@@ -100,7 +105,7 @@ export default function Dashboard() {
   const [clientToday, setClientToday] = useState<Date | null>(null)
   const [marketStatus, setMarketStatus] = useState({ status: 'CLOSED', detail: 'After Hours', timeMsg: 'Opens 9:30 AM ET' })
 
-  // Filter States - Configured with quantitative filters
+  // Filter States
   const [selectedSignalKeys, setSelectedSignalKeys] = useState<string[]>([
     'PULLBACK', 'BREAKDOWN', 'OVERBOUGHT', 'NEUTRAL'
   ])
@@ -127,7 +132,7 @@ export default function Dashboard() {
   const [newShares, setNewShares] = useState<string>('10')
   const [newTargetGain, setNewTargetGain] = useState<string>('10')
 
-  // Feedback Widget State
+  // Feedback State
   const [isFeedbackOpen, setIsFeedbackOpen] = useState(false)
   const [fbName, setFbName] = useState('')
   const [fbEmail, setFbEmail] = useState('')
@@ -138,7 +143,7 @@ export default function Dashboard() {
   const [fbSuccess, setFbSuccess] = useState(false)
   const [fbError, setFbError] = useState<string | null>(null)
 
-  // 1. Fetch Supabase Data
+  // Fetch Supabase Screener Data
   const fetchScanData = async () => {
     setLoading(true)
     try {
@@ -173,7 +178,50 @@ export default function Dashboard() {
     }
   }
 
-  // 2. TSX Market Hours
+  // Load cloud positions for authenticated user
+  const fetchCloudPositions = async (userId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('user_positions')
+        .select('*')
+        .eq('user_id', userId)
+
+      if (data && !error) {
+        const mapped: PocketPosition[] = data.map((d: any) => ({
+          id: d.id,
+          symbol: d.symbol,
+          buyDate: d.buy_date,
+          buyPrice: Number(d.buy_price),
+          shares: Number(d.shares),
+          targetGain: Number(d.target_gain),
+        }))
+        setPositions(mapped)
+      }
+    } catch (err) {
+      console.error('Failed to load cloud positions:', err)
+    }
+  }
+
+  // Google OAuth Sign In
+  const handleGoogleSignIn = async () => {
+    setAuthLoading(true)
+    await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo: `${window.location.origin}/auth/callback`,
+      },
+    })
+  }
+
+  // Sign Out
+  const handleSignOut = async () => {
+    await supabase.auth.signOut()
+    setUser(null)
+    const local = localStorage.getItem('trendnorth_pocket_positions')
+    setPositions(local ? JSON.parse(local) : [])
+  }
+
+  // TSX Market Hours
   const calculateMarketHours = () => {
     const now = new Date()
     const etTimeStr = now.toLocaleString('en-US', { timeZone: 'America/New_York' })
@@ -211,10 +259,25 @@ export default function Dashboard() {
       setTheme(savedTheme)
     }
 
-    const savedPositions = localStorage.getItem('trendnorth_pocket_positions')
-    if (savedPositions) {
-      try { setPositions(JSON.parse(savedPositions)) } catch (e) {}
-    }
+    // Auth session check
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setUser(session?.user ?? null)
+      if (session?.user) {
+        fetchCloudPositions(session.user.id)
+      } else {
+        const savedPositions = localStorage.getItem('trendnorth_pocket_positions')
+        if (savedPositions) {
+          try { setPositions(JSON.parse(savedPositions)) } catch (e) {}
+        }
+      }
+    })
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null)
+      if (session?.user) {
+        fetchCloudPositions(session.user.id)
+      }
+    })
 
     const savedRemoved = localStorage.getItem('trendnorth_removed_symbols')
     if (savedRemoved) {
@@ -238,18 +301,17 @@ export default function Dashboard() {
 
     return () => {
       clearInterval(interval)
+      subscription.unsubscribe()
       document.removeEventListener('mousedown', handleClickOutside)
     }
   }, [])
 
-  // Toggle Theme handler
   const toggleTheme = () => {
     const nextTheme: ThemeMode = theme === 'dark' ? 'light' : 'dark'
     setTheme(nextTheme)
     localStorage.setItem('trendnorth_theme', nextTheme)
   }
 
-  // Feedback Submission Handler
   const handleFeedbackSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setFbLoading(true)
@@ -286,7 +348,6 @@ export default function Dashboard() {
     }
   }
 
-  // Watchlist Addition / Removal
   const toggleWatchlistSymbol = (symbol: string) => {
     const isCustom = customSymbols.includes(symbol)
     const isExcluded = removedSymbols.includes(symbol)
@@ -309,7 +370,9 @@ export default function Dashboard() {
 
   const updatePositions = (updated: PocketPosition[]) => {
     setPositions(updated)
-    localStorage.setItem('trendnorth_pocket_positions', JSON.stringify(updated))
+    if (!user) {
+      localStorage.setItem('trendnorth_pocket_positions', JSON.stringify(updated))
+    }
   }
 
   const handleSelectPocketStock = (sym: string, companyName?: string) => {
@@ -327,24 +390,55 @@ export default function Dashboard() {
     }
   }
 
-  const handleAddPosition = (e: React.FormEvent) => {
+  const handleAddPosition = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!newSymbol) return
     const fallbackDate = newBuyDate || '2026-10-31'
-    const newPos: PocketPosition = {
-      id: `${newSymbol}-${Date.now()}`,
+    const newPosData = {
       symbol: newSymbol,
       buyDate: fallbackDate,
       buyPrice: parseFloat(newBuyPrice) || 0,
       shares: parseInt(newShares, 10) || 1,
       targetGain: parseFloat(newTargetGain) || 1
     }
-    updatePositions([...positions, newPos])
+
+    if (user) {
+      const { data, error } = await supabase
+        .from('user_positions')
+        .insert([{
+          user_id: user.id,
+          symbol: newPosData.symbol,
+          buy_date: newPosData.buyDate,
+          buy_price: newPosData.buyPrice,
+          shares: newPosData.shares,
+          target_gain: newPosData.targetGain,
+        }])
+        .select()
+
+      if (data && !error) {
+        const added: PocketPosition = {
+          id: data[0].id,
+          ...newPosData,
+        }
+        setPositions(prev => [...prev, added])
+      }
+    } else {
+      const localPos: PocketPosition = {
+        id: `${newSymbol}-${Date.now()}`,
+        ...newPosData,
+      }
+      updatePositions([...positions, localPos])
+    }
     setIsSheetOpen(false)
   }
 
-  const handleRemovePosition = (id: string) => {
-    updatePositions(positions.filter(p => p.id !== id))
+  const handleRemovePosition = async (id: string) => {
+    if (user) {
+      await supabase.from('user_positions').delete().eq('id', id)
+      setPositions(prev => prev.filter(p => p.id !== id))
+    } else {
+      updatePositions(positions.filter(p => p.id !== id))
+    }
   }
 
   const toggleSignalFilter = (tag: string) => {
@@ -536,7 +630,6 @@ export default function Dashboard() {
     } as ScreenerRecord
   }, [activeStockDetail, allAvailableStocks])
 
-  // Dynamic Theme Palette Class Mapping
   const themeBg = isDark ? 'bg-slate-950 text-slate-100' : 'bg-slate-50 text-slate-900'
   const themeCardBg = isDark ? 'bg-slate-900 border-slate-700' : 'bg-white border-slate-200'
   const themeSubHeaderBg = isDark ? 'bg-slate-900/95 border-slate-800' : 'bg-white/95 border-slate-200 shadow-xs'
@@ -548,9 +641,7 @@ export default function Dashboard() {
   const themeTextColor = isDark ? 'text-white' : 'text-slate-900'
   const themeMutedColor = isDark ? 'text-slate-300' : 'text-slate-600'
 
-  // =========================================================================
   // VIEW 1: FULL-PAGE MARKET DATA DETAILS VIEW
-  // =========================================================================
   if (selectedDetailStock) {
     const s = selectedDetailStock
     const cleanSym = s.symbol.replace('.TO', '')
@@ -807,9 +898,7 @@ export default function Dashboard() {
     )
   }
 
-  // =========================================================================
   // VIEW 2: MAIN DASHBOARD
-  // =========================================================================
   return (
     <div className={`min-h-screen ${themeBg} font-sans flex flex-col justify-between selection:bg-sky-500/30 transition-colors`}>
       <div>
@@ -849,6 +938,7 @@ export default function Dashboard() {
                 Engine Scan: {lastScanTime.slice(11, 16)} ET
               </span>
             )}
+            
             <Button 
               variant="outline" 
               size="sm" 
@@ -859,6 +949,39 @@ export default function Dashboard() {
               <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} />
               Refresh
             </Button>
+
+            {/* GOOGLE SIGN IN / USER PROFILE PILL */}
+            {user ? (
+              <div className="flex items-center gap-2 pl-2 border-l border-slate-700">
+                <span className={`text-xs font-semibold max-w-[120px] truncate ${themeTextColor}`} title={user.email}>
+                  {user.email?.split('@')[0]}
+                </span>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleSignOut}
+                  className={`h-8 w-8 p-0 cursor-pointer ${isDark ? 'text-slate-400 hover:text-rose-400' : 'text-slate-600 hover:text-rose-600'}`}
+                  title="Sign Out"
+                >
+                  <LogOut className="h-4 w-4" />
+                </Button>
+              </div>
+            ) : (
+              <Button
+                size="sm"
+                onClick={handleGoogleSignIn}
+                disabled={authLoading}
+                className="bg-white hover:bg-slate-100 text-slate-900 border border-slate-300 font-bold text-xs gap-1.5 h-9 px-3 cursor-pointer shadow-xs"
+              >
+                <svg className="h-3.5 w-3.5" viewBox="0 0 24 24">
+                  <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                  <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                  <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
+                  <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
+                </svg>
+                Sign In
+              </Button>
+            )}
           </div>
         </header>
 
@@ -998,6 +1121,15 @@ export default function Dashboard() {
                       <span className={`${themeMutedColor} hidden md:inline`}>
                         Targets Reached: <strong className="text-sky-500 font-mono">{portfolioTotals.targetsHit} / {positions.length}</strong>
                       </span>
+                      {user ? (
+                        <span className="text-[10px] text-emerald-400 font-bold flex items-center gap-1">
+                          <Cloud className="h-3 w-3" /> Cloud Synced
+                        </span>
+                      ) : (
+                        <span className="text-[10px] text-amber-400 font-bold flex items-center gap-1">
+                          ⚠️ Guest Storage
+                        </span>
+                      )}
                     </div>
                   </div>
 
@@ -1345,12 +1477,23 @@ export default function Dashboard() {
                 </div>
               </div>
 
-              {/* POCKET TRADER COMPLIANCE NOTICE */}
-              <div className={`p-3.5 rounded-xl border text-xs leading-relaxed flex items-start gap-2.5 ${isDark ? 'bg-slate-900/60 border-slate-800 text-slate-400' : 'bg-slate-100/90 border-slate-200 text-slate-600'}`}>
-                <Info className="h-4 w-4 text-sky-500 shrink-0 mt-0.5" />
-                <div>
-                  <strong className={themeTextColor}>Self-Directed Simulated Ledger:</strong> Pocket Trader is an informational calculation tool for tracking personal hypothetical targets. TrendNorth does not provide investment management, execute trades, hold deposits, or act as an intermediary. All gain/loss calculations are based on delayed market quotes and are for personal bookkeeping purposes only.
+              {/* POCKET TRADER STORAGE / COMPLIANCE NOTICE */}
+              <div className={`p-3.5 rounded-xl border text-xs leading-relaxed flex items-start justify-between gap-2.5 ${isDark ? 'bg-slate-900/60 border-slate-800 text-slate-400' : 'bg-slate-100/90 border-slate-200 text-slate-600'}`}>
+                <div className="flex items-start gap-2">
+                  <Info className="h-4 w-4 text-sky-500 shrink-0 mt-0.5" />
+                  <div>
+                    <strong className={themeTextColor}>Self-Directed Simulated Ledger:</strong> Pocket Trader is an informational calculation tool for personal targets. All metrics are calculated from delayed market quotes.
+                  </div>
                 </div>
+                {user ? (
+                  <Badge variant="outline" className="bg-emerald-950 text-emerald-300 border-emerald-600 text-[10px] font-bold shrink-0">
+                    ☁️ Cloud Persistent
+                  </Badge>
+                ) : (
+                  <Badge variant="outline" className="bg-amber-950 text-amber-300 border-amber-600 text-[10px] font-bold shrink-0">
+                    ⚠️ Browser Local Only
+                  </Badge>
+                )}
               </div>
 
               {/* Metric Tiles */}
@@ -1708,7 +1851,7 @@ export default function Dashboard() {
         </div>
       </footer>
 
-      {/* FLOATING USER FEEDBACK WIDGET (BOTTOM-RIGHT ANCHORED) */}
+      {/* FLOATING FEEDBACK WIDGET */}
       <div className="fixed bottom-6 right-6 z-50">
         {isFeedbackOpen ? (
           <div className={`w-[340px] sm:w-[380px] p-5 rounded-2xl border shadow-2xl transition-all ${
@@ -1744,7 +1887,6 @@ export default function Dashboard() {
                   </div>
                 )}
 
-                {/* Honeypot field (hidden from bots) */}
                 <input
                   type="text"
                   className="hidden"
@@ -1841,10 +1983,13 @@ export default function Dashboard() {
             </SheetDescription>
           </SheetHeader>
 
-          {/* INLINE DRAWER COMPLIANCE NOTICE */}
           <div className="mt-3 p-3 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/60 text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed flex items-start gap-2">
             <Info className="h-3.5 w-3.5 text-sky-500 shrink-0 mt-0.5" />
-            <span>This is a simulated paper-trading tool. Entries are saved locally to your browser and do not route or execute real-world financial transactions.</span>
+            <span>
+              {user 
+                ? 'Positions are synchronized directly with your cloud profile across devices.'
+                : 'Guest mode: Entries are stored only in this browser. Sign in above to sync across devices.'}
+            </span>
           </div>
 
           <form onSubmit={handleAddPosition} className="space-y-4 pt-4">
@@ -1948,7 +2093,7 @@ export default function Dashboard() {
 
             <div className="pt-4">
               <Button type="submit" className="w-full bg-sky-600 hover:bg-sky-500 text-white font-bold shadow-md cursor-pointer h-10">
-                Save to Pocket Trader
+                {user ? 'Save to Cloud Portfolio' : 'Save to Pocket Trader'}
               </Button>
             </div>
           </form>
