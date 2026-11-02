@@ -4,6 +4,7 @@ import yfinance as yf
 import pandas as pd
 from tabulate import tabulate
 from notifierV1 import send_stock_email
+import numpy as np
 
 # Load .env file automatically when executing locally
 try:
@@ -104,6 +105,36 @@ def calculate_rsi(series: pd.Series, period: int = 14) -> pd.Series:
     rs = gain / (loss.replace(0, 0.00001))
     return 100 - (100 / (1 + rs))
 
+def calculate_atr(df: pd.DataFrame, symbol: str, period: int = 14) -> float:
+    """
+    Calculates the 14-period Average True Range (ATR).
+    Safely handles both SingleIndex and MultiIndex yfinance DataFrames.
+    """
+    try:
+        if isinstance(df.columns, pd.MultiIndex):
+            high = df['High'][symbol]
+            low = df['Low'][symbol]
+            close = df['Close'][symbol]
+        else:
+            high = df['High']
+            low = df['Low']
+            close = df['Close']
+            
+        if len(close) < period + 1:
+            return np.nan
+
+        prev_close = close.shift(1)
+        tr1 = high - low
+        tr2 = (high - prev_close).abs()
+        tr3 = (low - prev_close).abs()
+
+        true_range = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
+        # Wilder's Exponential Smoothing for ATR
+        atr = true_range.ewm(alpha=1/period, min_periods=period, adjust=False).mean()
+        return float(atr.iloc[-1])
+    except Exception:
+        return np.nan
+
 def analyze_symbol(symbol: str, company_name: str):
     df = yf.download(symbol, period="1y", interval="1d", progress=False)
     if df.empty or len(df) < 200:
@@ -137,6 +168,19 @@ def analyze_symbol(symbol: str, company_name: str):
         signal = "KEEP / HOLD"
         summary = "Trading within baseline"
 
+    # --- TN-005: Volatility & Stop-Loss Engine (ATR) ---
+    atr_val = calculate_atr(df, symbol=symbol, period=14)
+    if not np.isnan(atr_val) and atr_val > 0:
+        atr_14 = round(atr_val, 2)
+        # Stop-loss: 2x ATR below current price (model invalidation)
+        stop_level_atr = round(max(0.01, current_price - (2 * atr_val)), 2)
+        # Swing target: 3x ATR above current price
+        target_atr = round(current_price + (3 * atr_val), 2)
+    else:
+        atr_14 = None
+        stop_level_atr = None
+        target_atr = None
+
     return {
         "Symbol": symbol,
         "Company": company_name,
@@ -146,12 +190,35 @@ def analyze_symbol(symbol: str, company_name: str):
         "SMA_200": round(current_200, 2),
         "SMA_Trend": sma_trend,
         "Signal": signal,
-        "Rationale": summary
+        "Rationale": summary,
+        "ATR_14": atr_14,
+        "Stop_Level_ATR": stop_level_atr,
+        "Target_ATR": target_atr
     }
+
+def fetch_custom_watchlist() -> dict:
+    """Fetches user-added custom tickers from Supabase to include in the automated scan."""
+    url = os.environ.get("SUPABASE_URL")
+    key = os.environ.get("SUPABASE_SERVICE_KEY") or os.environ.get("SUPABASE_KEY")
+
+    if not url or not key or create_client is None:
+        return {}
+
+    try:
+        supabase: Client = create_client(url, key)
+        res = supabase.table("custom_watchlist").select("symbol, company").execute()
+        if res.data:
+            return {
+                row["symbol"]: (row["company"] if row.get("company") else row["symbol"])
+                for row in res.data
+            }
+    except Exception as e:
+        print(f"⚠️ Warning: Could not retrieve custom_watchlist from Supabase: {e}")
+    return {}
 
 def push_to_supabase(df: pd.DataFrame):
     url = os.environ.get("SUPABASE_URL")
-    # Prefer secret service key for writes, fallback to key if configured
+    # Prefer secret service key for writes, fallback to anon key if configured
     key = os.environ.get("SUPABASE_SERVICE_KEY") or os.environ.get("SUPABASE_KEY")
 
     if not url or not key:
@@ -175,7 +242,10 @@ def push_to_supabase(df: pd.DataFrame):
             "SMA_50": "sma_50",
             "SMA_200": "sma_200",
             "SMA_Trend": "sma_trend",
-            "Rationale": "rationale"
+            "Rationale": "rationale",
+            "ATR_14": "atr_14",
+            "Stop_Level_ATR": "stop_level_atr",
+            "Target_ATR": "target_atr"
         }
         db_df.rename(columns=rename_map, inplace=True)
 
@@ -185,7 +255,8 @@ def push_to_supabase(df: pd.DataFrame):
 
         cols_to_keep = [
             "scan_timestamp", "symbol", "company", "price",
-            "signal", "rsi_14", "sma_50", "sma_200", "sma_trend", "rationale"
+            "signal", "rsi_14", "sma_50", "sma_200", "sma_trend", "rationale",
+            "atr_14", "stop_level_atr", "target_atr"
         ]
         valid_cols = [c for c in cols_to_keep if c in db_df.columns]
         
@@ -200,10 +271,16 @@ def push_to_supabase(df: pd.DataFrame):
 
 def main():
     print("Fetching TSX market data and computing signals...\n")
+    
+    # 1. Fetch user-added symbols from Supabase and union with baseline 59
+    custom_tickers = fetch_custom_watchlist()
+    full_watchlist = {**WATCHLIST, **custom_tickers}
+    print(f"📊 Scanning {len(full_watchlist)} total assets ({len(WATCHLIST)} baseline + {len(custom_tickers)} custom additions)...")
+
     results = []
     actionable = []
 
-    for symbol, company_name in WATCHLIST.items():
+    for symbol, company_name in full_watchlist.items():
         row = analyze_symbol(symbol, company_name)
         if row:
             results.append(row)
@@ -211,7 +288,7 @@ def main():
             if row["Signal"] != "KEEP / HOLD":
                 actionable.append(row)
 
-    # 1. Print full terminal grid, save CSV, and push to Supabase
+    # 2. Print full terminal grid, save CSV, and push to Supabase
     if results:
         results_df = pd.DataFrame(results)
         
@@ -226,7 +303,7 @@ def main():
         print("No data retrieved. Verify your internet connection or symbols.")
         return
 
-    # 2. Trigger the notifier email if any Buy/Sell signals were detected
+    # 3. Trigger the notifier email if any Buy/Sell signals were detected
     if actionable:
         print(f"\nTriggering email for {len(actionable)} actionable signal(s)...")
 
@@ -240,6 +317,9 @@ def main():
                     {item['Signal']}
                 </td>
                 <td style="padding: 8px; border: 1px solid #ddd;">{item['RSI_14']}</td>
+                <td style="padding: 8px; border: 1px solid #ddd;">{f"${item['ATR_14']:.2f}" if item['ATR_14'] else "N/A"}</td>
+                <td style="padding: 8px; border: 1px solid #ddd; color: #b30000;">{f"${item['Stop_Level_ATR']:.2f}" if item['Stop_Level_ATR'] else "N/A"}</td>
+                <td style="padding: 8px; border: 1px solid #ddd; color: #008000;">{f"${item['Target_ATR']:.2f}" if item['Target_ATR'] else "N/A"}</td>
                 <td style="padding: 8px; border: 1px solid #ddd;">{item['Rationale']}</td>
             </tr>
             """
@@ -250,15 +330,18 @@ def main():
         <html>
         <body style="font-family: Arial, sans-serif; color: #333;">
             <h2 style="color: #0b3954;">🚨 TSX Market Actionable Alerts</h2>
-            <p>The following symbols have met your technical criteria for action:</p>
-            <table style="border-collapse: collapse; width: 100%; text-align: left; font-size: 14px;">
+            <p>The following symbols have met your technical criteria for action (with ATR Volatility Bands):</p>
+            <table style="border-collapse: collapse; width: 100%; text-align: left; font-size: 13px;">
                 <thead>
                     <tr style="background-color: #f2f2f2;">
                         <th style="padding: 8px; border: 1px solid #ddd;">Symbol</th>
                         <th style="padding: 8px; border: 1px solid #ddd;">Company</th>
                         <th style="padding: 8px; border: 1px solid #ddd;">Price</th>
                         <th style="padding: 8px; border: 1px solid #ddd;">Signal</th>
-                        <th style="padding: 8px; border: 1px solid #ddd;">RSI (14)</th>
+                        <th style="padding: 8px; border: 1px solid #ddd;">RSI</th>
+                        <th style="padding: 8px; border: 1px solid #ddd;">14D ATR</th>
+                        <th style="padding: 8px; border: 1px solid #ddd;">Stop Level (2x ATR)</th>
+                        <th style="padding: 8px; border: 1px solid #ddd;">Target (3x ATR)</th>
                         <th style="padding: 8px; border: 1px solid #ddd;">Rationale</th>
                     </tr>
                 </thead>
@@ -267,7 +350,9 @@ def main():
                 </tbody>
             </table>
             <br>
-            <p style="font-size: 12px; color: #777;">Generated by your automated TSX Screener.</p>
+            <p style="font-size: 11px; color: #777;">
+                Disclaimer: TrendNorth is an educational research tool. ATR stop levels and price targets represent mathematical volatility models and do not constitute financial advice.
+            </p>
         </body>
         </html>
         """

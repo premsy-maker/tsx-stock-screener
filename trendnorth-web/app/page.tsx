@@ -18,7 +18,7 @@ import {
   Check, SlidersHorizontal, ChevronDown, RotateCcw,
   BookmarkPlus, BookmarkX, Briefcase, Sun, Moon,
   ShieldAlert, Info, MessageSquareText, X, Send,
-  LogOut, Cloud
+  LogOut, Cloud, Activity, ShieldCheck
 } from 'lucide-react'
 
 interface PocketPosition {
@@ -28,9 +28,10 @@ interface PocketPosition {
   buyPrice: number
   shares: number
   targetGain: number
+  stopLoss?: number
 }
 
-type SortField = 'symbol' | 'price' | 'rsi_14' | 'sma_50' | 'sma_200'
+type SortField = 'symbol' | 'price' | 'rsi_14' | 'sma_50' | 'sma_200' | 'atr_14' | 'stop_level_atr' | 'target_atr'
 type SortOrder = 'asc' | 'desc'
 type ThemeMode = 'dark' | 'light'
 
@@ -131,6 +132,7 @@ export default function Dashboard() {
   const [newBuyPrice, setNewBuyPrice] = useState<string>('0')
   const [newShares, setNewShares] = useState<string>('10')
   const [newTargetGain, setNewTargetGain] = useState<string>('10')
+  const [newStopLoss, setNewStopLoss] = useState<string>('')
 
   // Feedback State
   const [isFeedbackOpen, setIsFeedbackOpen] = useState(false)
@@ -194,6 +196,7 @@ export default function Dashboard() {
           buyPrice: Number(d.buy_price),
           shares: Number(d.shares),
           targetGain: Number(d.target_gain),
+          stopLoss: d.stop_loss ? Number(d.stop_loss) : undefined
         }))
         setPositions(mapped)
       }
@@ -202,7 +205,7 @@ export default function Dashboard() {
     }
   }
 
-  // Google OAuth Sign In with defensive try/catch
+  // Google OAuth Sign In
   const handleGoogleSignIn = async () => {
     try {
       setAuthLoading(true)
@@ -263,7 +266,6 @@ export default function Dashboard() {
 
     const interval = setInterval(calculateMarketHours, 60000)
 
-    // Reset button lock if restored from browser back-forward cache (bfcache)
     const handlePageShow = () => {
       setAuthLoading(false)
     }
@@ -274,7 +276,6 @@ export default function Dashboard() {
       setTheme(savedTheme)
     }
 
-    // Auth session check
     supabase.auth.getSession().then(({ data: { session } }) => {
       setUser(session?.user ?? null)
       if (session?.user) {
@@ -403,6 +404,10 @@ export default function Dashboard() {
     const match = stocks.find(s => s.symbol === cleanSym)
     if (match && match.price) {
       setNewBuyPrice(String(match.price))
+      if (match.atr_14) {
+        setNewTargetGain((Number(match.atr_14) * 3).toFixed(2))
+        setNewStopLoss(Math.max(0.01, Number(match.price) - (Number(match.atr_14) * 2)).toFixed(2))
+      }
     }
   }
 
@@ -415,7 +420,8 @@ export default function Dashboard() {
       buyDate: fallbackDate,
       buyPrice: parseFloat(newBuyPrice) || 0,
       shares: parseInt(newShares, 10) || 1,
-      targetGain: parseFloat(newTargetGain) || 1
+      targetGain: parseFloat(newTargetGain) || 1,
+      stopLoss: newStopLoss ? parseFloat(newStopLoss) : undefined
     }
 
     if (user) {
@@ -428,6 +434,7 @@ export default function Dashboard() {
           buy_price: newPosData.buyPrice,
           shares: newPosData.shares,
           target_gain: newPosData.targetGain,
+          stop_loss: newPosData.stopLoss
         }])
         .select()
 
@@ -488,7 +495,10 @@ export default function Dashboard() {
           sma_50: 34.50,
           sma_200: 33.00,
           sma_trend: 'Bullish',
-          rationale: 'Baseline technical regime'
+          rationale: 'Baseline technical regime',
+          atr_14: 1.05,
+          stop_level_atr: 32.90,
+          target_atr: 38.15
         } as ScreenerRecord)
       }
     })
@@ -590,11 +600,14 @@ export default function Dashboard() {
 
       const isTargetReached = currentPrice >= targetPrice
       const targetProgress = Math.min(100, Math.max(0, ((currentPrice - pos.buyPrice) / (pos.targetGain || 1)) * 100))
+      
+      // Stop loss verification
+      const isStopBreached = pos.stopLoss ? currentPrice <= pos.stopLoss : false
 
       return {
         ...pos, company, currentPrice, signal, targetPrice,
         totalCost, currentValue, dollarPnl, pctPnl, daysHeld,
-        isTargetReached, targetProgress
+        isTargetReached, targetProgress, isStopBreached
       }
     })
   }, [positions, allAvailableStocks, clientToday])
@@ -617,8 +630,8 @@ export default function Dashboard() {
   }, [positions])
 
   const handleExportCSV = () => {
-    const headers = ['Symbol,Buy Date,Buy Price,Shares,Target Gain\n']
-    const rows = positions.map(p => `${p.symbol},${p.buyDate},${p.buyPrice},${p.shares},${p.targetGain}\n`)
+    const headers = ['Symbol,Buy Date,Buy Price,Shares,Target Gain,Stop Loss\n']
+    const rows = positions.map(p => `${p.symbol},${p.buyDate},${p.buyPrice},${p.shares},${p.targetGain},${p.stopLoss ?? ''}\n`)
     const blob = new Blob([...headers, ...rows], { type: 'text/csv' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
@@ -642,9 +655,16 @@ export default function Dashboard() {
       sma_50: 34.50,
       sma_200: 33.00,
       sma_trend: 'Active',
-      rationale: 'Active TSX Equity Profile'
+      rationale: 'Active TSX Equity Profile',
+      atr_14: 1.05,
+      stop_level_atr: 32.90,
+      target_atr: 38.15
     } as ScreenerRecord
   }, [activeStockDetail, allAvailableStocks])
+
+  const selectedStockObj = useMemo(() => {
+    return allAvailableStocks.find(s => s.symbol === newSymbol) || null
+  }, [allAvailableStocks, newSymbol])
 
   const themeBg = isDark ? 'bg-slate-950 text-slate-100' : 'bg-slate-50 text-slate-900'
   const themeCardBg = isDark ? 'bg-slate-900 border-slate-700' : 'bg-white border-slate-200'
@@ -764,16 +784,16 @@ export default function Dashboard() {
 
             {/* Key Statistics */}
             <div className="space-y-3">
-              <h3 className={`text-xs font-extrabold uppercase tracking-wider ${themeTextColor}`}>Key Statistics</h3>
+              <h3 className={`text-xs font-extrabold uppercase tracking-wider ${themeTextColor}`}>Key Statistics & Volatility Metrics</h3>
               <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3">
                 {[
                   { label: 'Open Price', val: `$${(s.price * 0.995).toFixed(2)}` },
                   { label: 'Day High', val: `$${(s.price * 1.012).toFixed(2)}` },
                   { label: 'Day Low', val: `$${(s.price * 0.988).toFixed(2)}` },
+                  { label: '14D ATR', val: s.atr_14 ? `$${Number(s.atr_14).toFixed(2)}` : '—' },
+                  { label: 'Stop (2x ATR)', val: s.stop_level_atr ? `$${Number(s.stop_level_atr).toFixed(2)}` : '—' },
+                  { label: 'Target (3x ATR)', val: s.target_atr ? `$${Number(s.target_atr).toFixed(2)}` : '—' },
                   { label: '52-W High', val: `$${(s.price * 1.22).toFixed(2)}` },
-                  { label: '52-W Low', val: `$${(s.price * 0.78).toFixed(2)}` },
-                  { label: 'Volume', val: '4,942,000' },
-                  { label: 'Avg Volume', val: '4,097,400' },
                   { label: 'Exchange', val: 'TSX (Toronto)' },
                 ].map(stat => (
                   <div key={stat.label} className={`p-3.5 rounded-xl border ${themeBorder} ${isDark ? 'bg-slate-900/90' : 'bg-white shadow-2xs'}`}>
@@ -784,7 +804,7 @@ export default function Dashboard() {
               </div>
             </div>
 
-            {/* Dividends & Valuation */}
+            {/* Dividends & Technical Risk Models */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className={`p-5 rounded-2xl border ${themeBorder} ${isDark ? 'bg-slate-900/90' : 'bg-white shadow-xs'} space-y-4`}>
                 <div className={`flex items-center justify-between pb-3 border-b ${isDark ? 'border-slate-800' : 'border-slate-100'}`}>
@@ -811,17 +831,21 @@ export default function Dashboard() {
 
               <div className={`p-5 rounded-2xl border ${themeBorder} ${isDark ? 'bg-slate-900/90' : 'bg-white shadow-xs'} space-y-4`}>
                 <div className={`flex items-center justify-between pb-3 border-b ${isDark ? 'border-slate-800' : 'border-slate-100'}`}>
-                  <h3 className={`text-sm font-bold ${themeTextColor}`}>Valuation & Technicals</h3>
+                  <h3 className={`text-sm font-bold ${themeTextColor}`}>TN-005 Volatility & Risk Models</h3>
                   <span className="text-xs font-bold text-sky-500 font-mono">14D RSI: {Number(s.rsi_14).toFixed(1)}</span>
                 </div>
                 <div className="space-y-3 text-xs">
                   <div className={`flex justify-between items-center py-1 border-b ${isDark ? 'border-slate-800' : 'border-slate-100'}`}>
-                    <span className={`${themeMutedColor} font-medium`}>Market Capitalization</span>
-                    <span className={`font-bold text-sm ${themeTextColor}`}>$84.99B</span>
+                    <span className={`${themeMutedColor} font-medium`}>Average True Range (14D)</span>
+                    <span className={`font-bold text-sm font-mono ${themeTextColor}`}>{s.atr_14 ? `$${Number(s.atr_14).toFixed(2)}` : '—'}</span>
                   </div>
                   <div className={`flex justify-between items-center py-1 border-b ${isDark ? 'border-slate-800' : 'border-slate-100'}`}>
-                    <span className={`${themeMutedColor} font-medium`}>Price to Earnings (P/E)</span>
-                    <span className={`font-bold ${themeTextColor}`}>9.65</span>
+                    <span className={`${themeMutedColor} font-medium`}>Model Stop-Loss (2x ATR)</span>
+                    <span className="font-bold font-mono text-rose-400">{s.stop_level_atr ? `$${Number(s.stop_level_atr).toFixed(2)}` : '—'}</span>
+                  </div>
+                  <div className={`flex justify-between items-center py-1 border-b ${isDark ? 'border-slate-800' : 'border-slate-100'}`}>
+                    <span className={`${themeMutedColor} font-medium`}>Model Swing Target (3x ATR)</span>
+                    <span className="font-bold font-mono text-emerald-400">{s.target_atr ? `$${Number(s.target_atr).toFixed(2)}` : '—'}</span>
                   </div>
                   <div className="flex justify-between items-center py-1">
                     <span className={`${themeMutedColor} font-medium`}>Moving Averages</span>
@@ -890,7 +914,7 @@ export default function Dashboard() {
                   TrendNorth is an algorithmic market research and technical screening tool designed exclusively for educational purposes. <strong>TrendNorth is not registered as an investment adviser, portfolio manager, or broker-dealer</strong> with the Ontario Securities Commission (OSC), the Canadian Investment Regulatory Organization (CIRO), the U.S. SEC, or any other financial regulatory agency.
                 </p>
                 <p className="leading-relaxed text-[11px]">
-                  Technical conditions (such as <em>Oversold Pullback</em>, <em>Trend Breakdown</em>, and <em>Momentum Overextended</em>) represent programmatic calculations derived from mathematical models (14-day RSI, 50-day SMA, 200-day SMA) applied to delayed market data. <strong>These mathematical outputs do not constitute investment advice, financial planning, or a recommendation to purchase or sell any security.</strong>
+                  Technical conditions (such as <em>Oversold Pullback</em>, <em>Trend Breakdown</em>, and <em>Momentum Overextended</em>) and volatility-based thresholds (such as 14-day ATR stop levels) represent programmatic calculations derived from mathematical models applied to delayed market data. <strong>These mathematical outputs do not constitute investment advice, financial planning, or a recommendation to purchase or sell any security.</strong>
                 </p>
               </div>
 
@@ -1324,7 +1348,7 @@ export default function Dashboard() {
                 )}
               </div>
 
-              {/* DATA TABLE */}
+              {/* DATA TABLE (UPDATED WITH TN-005 ATR METRICS) */}
               <div className={`border rounded-2xl shadow-xl overflow-hidden ${themeCardBg}`}>
                 <div className="overflow-x-auto max-h-[700px] overflow-y-auto">
                   <table className="w-full text-left text-sm relative">
@@ -1350,14 +1374,22 @@ export default function Dashboard() {
                             14D RSI <ArrowUpDown className="h-3.5 w-3.5 text-slate-400" />
                           </div>
                         </th>
-                        <th className="px-4 py-3.5 cursor-pointer hover:text-sky-500" onClick={() => handleSort('sma_50')}>
+                        {/* TN-005: 14D Volatility (ATR) */}
+                        <th className="px-4 py-3.5 cursor-pointer hover:text-sky-500" onClick={() => handleSort('atr_14')}>
                           <div className="flex items-center gap-1.5">
-                            50D SMA <ArrowUpDown className="h-3.5 w-3.5 text-slate-400" />
+                            14D ATR <ArrowUpDown className="h-3.5 w-3.5 text-slate-400" />
                           </div>
                         </th>
-                        <th className="px-4 py-3.5 cursor-pointer hover:text-sky-500" onClick={() => handleSort('sma_200')}>
+                        {/* TN-005: Stop Level */}
+                        <th className="px-4 py-3.5 cursor-pointer hover:text-sky-500" onClick={() => handleSort('stop_level_atr')}>
                           <div className="flex items-center gap-1.5">
-                            200D SMA <ArrowUpDown className="h-3.5 w-3.5 text-slate-400" />
+                            Stop (2x ATR) <ArrowUpDown className="h-3.5 w-3.5 text-slate-400" />
+                          </div>
+                        </th>
+                        {/* TN-005: Swing Target */}
+                        <th className="px-4 py-3.5 cursor-pointer hover:text-sky-500" onClick={() => handleSort('target_atr')}>
+                          <div className="flex items-center gap-1.5">
+                            Target (3x ATR) <ArrowUpDown className="h-3.5 w-3.5 text-slate-400" />
                           </div>
                         </th>
                         <th className="px-5 py-3.5">Condition Rationale</th>
@@ -1367,7 +1399,7 @@ export default function Dashboard() {
                     <tbody className={`divide-y ${isDark ? 'divide-slate-800' : 'divide-slate-200'}`}>
                       {filteredAndSortedStocks.length === 0 ? (
                         <tr>
-                          <td colSpan={8} className={`px-5 py-16 text-center font-medium ${themeMutedColor}`}>
+                          <td colSpan={9} className={`px-5 py-16 text-center font-medium ${themeMutedColor}`}>
                             No securities match the selected filter criteria.
                           </td>
                         </tr>
@@ -1420,12 +1452,19 @@ export default function Dashboard() {
                                 {Number(stock.rsi_14).toFixed(1)}
                               </td>
 
-                              <td className={`px-4 py-3.5 font-mono font-medium ${themeMutedColor}`}>
-                                ${Number(stock.sma_50).toFixed(2)}
+                              {/* TN-005 Column: ATR */}
+                              <td className={`px-4 py-3.5 font-mono font-medium ${themeTextColor}`}>
+                                {stock.atr_14 ? `$${Number(stock.atr_14).toFixed(2)}` : '—'}
                               </td>
 
-                              <td className={`px-4 py-3.5 font-mono font-medium ${themeMutedColor}`}>
-                                ${Number(stock.sma_200).toFixed(2)}
+                              {/* TN-005 Column: Stop Loss */}
+                              <td className="px-4 py-3.5 font-mono font-bold text-rose-400">
+                                {stock.stop_level_atr ? `$${Number(stock.stop_level_atr).toFixed(2)}` : '—'}
+                              </td>
+
+                              {/* TN-005 Column: Target */}
+                              <td className="px-4 py-3.5 font-mono font-bold text-emerald-400">
+                                {stock.target_atr ? `$${Number(stock.target_atr).toFixed(2)}` : '—'}
                               </td>
 
                               <td className={`px-5 py-3.5 text-xs font-medium ${themeMutedColor}`}>
@@ -1563,6 +1602,7 @@ export default function Dashboard() {
                           <th className="px-4 py-3.5">Current Price</th>
                           <th className="px-4 py-3.5">Unrealized P&L</th>
                           <th className="px-4 py-3.5">Target Status</th>
+                          <th className="px-4 py-3.5">Stop-Loss Level</th>
                           <th className="px-4 py-3.5">Model Condition</th>
                           <th className="px-4 py-3.5 text-right">Action</th>
                         </tr>
@@ -1607,6 +1647,17 @@ export default function Dashboard() {
                                   </div>
                                 )}
                               </td>
+                              {/* TN-005 Stop Loss Display in Pocket Trader */}
+                              <td className="px-4 py-3.5 font-mono text-xs">
+                                {pos.stopLoss ? (
+                                  <span className={pos.isStopBreached ? 'text-rose-500 font-bold flex items-center gap-1' : 'text-slate-400 font-medium'}>
+                                    {pos.isStopBreached && <ShieldAlert className="h-3.5 w-3.5 text-rose-500" />}
+                                    ${pos.stopLoss.toFixed(2)} {pos.isStopBreached && '(BREACHED)'}
+                                  </span>
+                                ) : (
+                                  <span className="text-slate-500">—</span>
+                                )}
+                              </td>
                               <td className="px-4 py-3.5">
                                 <Badge variant="outline" className={sigCfg.badgeClass}>
                                   {sigCfg.label}
@@ -1637,9 +1688,9 @@ export default function Dashboard() {
               <div className={`p-6 rounded-2xl border shadow-xl ${themeCardBg}`}>
                 <div className="flex items-center gap-2 mb-4">
                   <BarChart3 className="h-5 w-5 text-sky-500" />
-                  <h3 className={`font-bold text-base ${themeTextColor}`}>TSX Momentum & Moving Average Spreads</h3>
+                  <h3 className={`font-bold text-base ${themeTextColor}`}>TSX Momentum, Moving Average & Volatility Spreads</h3>
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                   <div className={`p-5 rounded-xl border ${isDark ? 'bg-slate-800/80 border-emerald-600/80' : 'bg-emerald-50 border-emerald-200'}`}>
                     <p className="text-xs font-extrabold text-emerald-500 uppercase">Bullish Uptrend Baseline</p>
                     <p className={`text-3xl font-black mt-1 ${themeTextColor}`}>
@@ -1661,6 +1712,14 @@ export default function Dashboard() {
                     </p>
                     <p className={`text-xs font-medium mt-1 ${themeMutedColor}`}>14D RSI ≤ 40.0</p>
                   </div>
+                  {/* TN-005 Volatility Spread Card */}
+                  <div className={`p-5 rounded-xl border ${isDark ? 'bg-slate-800/80 border-amber-600/80' : 'bg-amber-50 border-amber-200'}`}>
+                    <p className="text-xs font-extrabold text-amber-500 uppercase">Avg 14D Volatility (ATR)</p>
+                    <p className={`text-3xl font-black mt-1 ${themeTextColor}`}>
+                      ${(activeMonitoredStocks.reduce((acc, s) => acc + (Number(s.atr_14) || 0), 0) / (activeMonitoredStocks.length || 1)).toFixed(2)}
+                    </p>
+                    <p className={`text-xs font-medium mt-1 ${themeMutedColor}`}>Universe Mean Daily Range</p>
+                  </div>
                 </div>
               </div>
             </TabsContent>
@@ -1677,7 +1736,7 @@ export default function Dashboard() {
                       TrendNorth Operational & Technical Manual
                     </h2>
                     <p className={`text-xs ${themeMutedColor} mt-0.5`}>
-                      Quantitative models, indicator conditions, cloud scheduling, and self-directed tracking procedures.
+                      Quantitative models, indicator conditions, ATR volatility engine, cloud scheduling, and self-directed tracking procedures.
                     </p>
                   </div>
                 </div>
@@ -1777,21 +1836,22 @@ export default function Dashboard() {
                   </div>
                 </div>
 
+                {/* TN-005 SECTION IN MANUAL */}
                 <div className="space-y-3">
                   <h3 className="text-sm font-extrabold uppercase tracking-wider text-sky-500 flex items-center gap-2">
                     <span className="text-xs px-2 py-0.5 rounded bg-sky-500/10 border border-sky-500/30 text-sky-500">03</span>
-                    Pocket Trader Portfolio Management
+                    TN-005: Volatility & Dynamic Stop-Loss Engine (ATR)
                   </h3>
                   <div className="pl-8 space-y-2 text-xs sm:text-sm">
-                    <ul className={`list-disc space-y-1.5 pl-4 ${themeMutedColor}`}>
+                    <p className={`leading-relaxed ${themeMutedColor}`}>
+                      To avoid arbitrary dollar guesses, TrendNorth utilizes Welles Wilder&apos;s 14-day <strong>Average True Range (ATR)</strong> to dynamically assess the expected daily price volatility of each Canadian security:
+                    </p>
+                    <ul className={`list-disc space-y-2 pl-4 ${themeMutedColor}`}>
                       <li>
-                        <strong className={themeTextColor}>Active Position Tracking:</strong> Log entry price, purchase date, and share size for open or planned setups directly from the slide-out sheet or stock detail profiles.
+                        <strong className={themeTextColor}>Model Invalidation (2x ATR Stop Level):</strong> Calculated as <code className="text-rose-400 font-mono">Current Price - (2 × 14D ATR)</code>. Placing stop-losses beyond twice the daily statistical variance minimizes premature &quot;whipsaws&quot; caused by normal market noise while protecting capital when a setup breaks down.
                       </li>
                       <li>
-                        <strong className={themeTextColor}>Real-Time Target Achievements:</strong> Specify your CAD target gain per share (e.g., +$10.00). The position table calculates progress percentages and illuminates <strong className="text-emerald-500">🎯 TARGET REACHED</strong> as soon as the live scanned price crosses your threshold.
-                      </li>
-                      <li>
-                        <strong className={themeTextColor}>Zero-Cloud Client Storage:</strong> Holdings persist directly inside browser storage (`localStorage`). You can backup or export your holdings via <strong className="text-sky-500">Export CSV</strong> at any time without requiring external database accounts.
+                        <strong className={themeTextColor}>Mathematical Swing Target (3x ATR):</strong> Calculated as <code className="text-emerald-400 font-mono">Current Price + (3 × 14D ATR)</code>. Represents approximately 3 daily candles of directional expansion, offering an objective <strong>1.5:1 Risk/Reward profile</strong> on swing setups.
                       </li>
                     </ul>
                   </div>
@@ -1800,6 +1860,26 @@ export default function Dashboard() {
                 <div className="space-y-3">
                   <h3 className="text-sm font-extrabold uppercase tracking-wider text-sky-500 flex items-center gap-2">
                     <span className="text-xs px-2 py-0.5 rounded bg-sky-500/10 border border-sky-500/30 text-sky-500">04</span>
+                    Pocket Trader Portfolio Management
+                  </h3>
+                  <div className="pl-8 space-y-2 text-xs sm:text-sm">
+                    <ul className={`list-disc space-y-1.5 pl-4 ${themeMutedColor}`}>
+                      <li>
+                        <strong className={themeTextColor}>Active Position Tracking:</strong> Log entry price, purchase date, and share size for open or planned setups directly from the slide-out sheet or stock detail profiles.
+                      </li>
+                      <li>
+                        <strong className={themeTextColor}>ATR Model Suggestions:</strong> Clicking &quot;Apply ATR Model Targets&quot; in the position drawer automatically populates volatility-adjusted targets and stop levels.
+                      </li>
+                      <li>
+                        <strong className={themeTextColor}>Cloud Sync Persistence:</strong> Logged-in Google users have their portfolios synchronized in real time with Supabase across devices.
+                      </li>
+                    </ul>
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  <h3 className="text-sm font-extrabold uppercase tracking-wider text-sky-500 flex items-center gap-2">
+                    <span className="text-xs px-2 py-0.5 rounded bg-sky-500/10 border border-sky-500/30 text-sky-500">05</span>
                     Pipeline Execution Schedule & Data Latency
                   </h3>
                   <div className="pl-8 grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
@@ -1846,7 +1926,7 @@ export default function Dashboard() {
                 TrendNorth is an algorithmic market research and technical screening tool designed exclusively for educational purposes. <strong>TrendNorth is not registered as an investment adviser, portfolio manager, or broker-dealer</strong> with the Ontario Securities Commission (OSC), the Canadian Investment Regulatory Organization (CIRO), the U.S. SEC, or any other financial regulatory agency.
               </p>
               <p className="leading-relaxed text-[11px]">
-                Technical conditions (such as <em>Oversold Pullback</em>, <em>Trend Breakdown</em>, and <em>Momentum Overextended</em>) represent programmatic calculations derived from mathematical models (14-day RSI, 50-day SMA, 200-day SMA) applied to delayed market data. <strong>These mathematical outputs do not constitute investment advice, financial planning, or a recommendation to purchase or sell any security.</strong>
+                Technical conditions (such as <em>Oversold Pullback</em>, <em>Trend Breakdown</em>, and <em>Momentum Overextended</em>) represent programmatic calculations derived from mathematical models (14-day RSI, 50-day SMA, 200-day SMA, 14-day ATR) applied to delayed market data. <strong>These mathematical outputs do not constitute investment advice, financial planning, or a recommendation to purchase or sell any security.</strong>
               </p>
             </div>
 
@@ -1995,7 +2075,7 @@ export default function Dashboard() {
           <SheetHeader className={`pb-4 border-b ${isDark ? 'border-slate-800' : 'border-slate-200'}`}>
             <SheetTitle className={`text-lg font-bold ${themeTextColor}`}>Track New Position</SheetTitle>
             <SheetDescription className={`text-xs ${themeMutedColor}`}>
-              Type or select any TSX or custom symbol. Target achievements and P&L compute automatically.
+              Type or select any TSX or custom symbol. Target achievements, dynamic stop losses, and P&L compute automatically.
             </SheetDescription>
           </SheetHeader>
 
@@ -2051,6 +2131,34 @@ export default function Dashboard() {
               )}
             </div>
 
+            {/* TN-005 Volatility & ATR Auto-Suggest Banner */}
+            {selectedStockObj && selectedStockObj.atr_14 && (
+              <div className="p-3 rounded-xl border border-sky-500/30 bg-sky-500/10 space-y-2">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-sky-400 font-bold flex items-center gap-1.5">
+                    <Activity className="h-3.5 w-3.5" /> 14D Volatility (ATR): ${Number(selectedStockObj.atr_14).toFixed(2)}
+                  </span>
+                  <span className="text-[11px] text-slate-400">Wilder&apos;s Model</span>
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    const price = Number(newBuyPrice) || Number(selectedStockObj.price) || 0
+                    const atr = Number(selectedStockObj.atr_14) || 1
+                    const suggestedGain = (atr * 3).toFixed(2)
+                    const suggestedStop = Math.max(0.01, price - (atr * 2)).toFixed(2)
+                    setNewTargetGain(suggestedGain)
+                    setNewStopLoss(suggestedStop)
+                  }}
+                  className="w-full h-8 text-xs font-bold bg-sky-600/20 hover:bg-sky-600/30 text-sky-300 border-sky-500/40 cursor-pointer"
+                >
+                  <ShieldCheck className="h-3.5 w-3.5 mr-1 text-emerald-400" /> Apply ATR Model Targets (2x Stop / 3x Target)
+                </Button>
+              </div>
+            )}
+
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label htmlFor="date" className={`text-xs font-bold ${themeTextColor}`}>Entry Date</Label>
@@ -2105,6 +2213,23 @@ export default function Dashboard() {
                   required
                 />
               </div>
+            </div>
+
+            {/* TN-005 Stop Loss Input */}
+            <div className="space-y-1.5">
+              <Label htmlFor="stopLoss" className={`text-xs font-bold ${themeTextColor}`}>
+                Technical Stop-Loss Level (CAD) <span className="text-[10px] text-slate-400 font-normal">(Optional)</span>
+              </Label>
+              <Input
+                id="stopLoss"
+                type="number"
+                step="any"
+                min="0.01"
+                placeholder="e.g. 152.50"
+                value={newStopLoss}
+                onChange={(e) => setNewStopLoss(e.target.value)}
+                className={`h-10 text-xs font-medium ${themeInputBg}`}
+              />
             </div>
 
             <div className="pt-4">

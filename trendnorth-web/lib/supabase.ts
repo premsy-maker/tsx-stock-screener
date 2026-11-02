@@ -17,4 +17,7 @@ export interface ScreenerRecord {
   sma_200: number
   sma_trend: string
   rationale: string
+  atr_14?: number | null
+  stop_level_atr?: number | null
+  target_atr?: number | null
 }
