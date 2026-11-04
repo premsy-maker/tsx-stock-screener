@@ -1161,10 +1161,10 @@ export default function Dashboard() {
             <div>
               <div className="flex items-center gap-2">
                 <span className={`font-black text-lg tracking-tight ${themeTextColor}`}>
-                  TrendNorth
+                  TrendNorth Analytics
                 </span>
                 <span className="text-xs px-2 py-0.5 rounded-full font-bold bg-sky-500/20 text-sky-400 border border-sky-500/30">
-                  TSX Pro
+                  US & TSX Momentum
                 </span>
               </div>
             </div>
@@ -2150,7 +2150,9 @@ export default function Dashboard() {
                 </span>
               </div>
               <p className="leading-relaxed text-[11px]">
-                TrendNorth is an algorithmic market research and technical screening tool designed exclusively for educational purposes[cite: 1, 2]. <strong>TrendNorth is not registered as an investment adviser, portfolio manager, or broker-dealer</strong> with the Ontario Securities Commission (OSC), the Canadian Investment Regulatory Organization (CIRO), the U.S. SEC, or any other financial regulatory agency[cite: 1, 2].
+                TrendNorth Analytics is an algorithmic market research and technical screening tool designed exclusively for educational purposes. 
+                <strong>TrendNorth Analytics is not registered as an investment adviser, portfolio manager, or broker-dealer</strong> with the Ontario Securities Commission (OSC), CIRO, the U.S. Securities and Exchange Commission (SEC), or FINRA. 
+                  Technical metrics and ATR-based thresholds do not constitute investment advice or order executions.
               </p>
               <p className="leading-relaxed text-[11px]">
                 Technical conditions and volatility-based thresholds represent programmatic calculations derived from mathematical models applied to delayed market data[cite: 1, 2]. <strong>These mathematical outputs do not constitute investment advice, financial planning, or a recommendation to purchase or sell any security[cite: 1, 2].</strong>
