@@ -101,12 +101,12 @@ const TUTORIAL_STEPS = [
   },
   {
     step: 2,
-    badge: 'Wilder\'s Volatility Model',
+    badge: "Wilder's Volatility Model",
     title: '14-Day Average True Range (ATR) & Risk Bounds',
     icon: ShieldCheck,
     color: 'text-amber-400',
     description:
-      'Every equity has an idiosyncratic daily volatility signature. We utilize Welles Wilder\'s 14-day Average True Range (ATR) so risk parameters reflect statistical asset variance rather than arbitrary dollar amounts.',
+      "Every equity has an idiosyncratic daily volatility signature. We utilize Welles Wilder's 14-day Average True Range (ATR) so risk parameters reflect statistical asset variance rather than arbitrary dollar amounts.",
     bullets: [
       {
         term: '14D ATR Metric',
@@ -371,19 +371,13 @@ export default function Dashboard() {
       setTheme(savedTheme)
     }
 
-    // // Auto-launch walkthrough if first time
-    // const hasSeenWalkthrough = localStorage.getItem('trendnorth_walkthrough_seen')
-    // if (!hasSeenWalkthrough) {
-    //   const timer = setTimeout(() => {
-    //     setIsWalkthroughOpen(true)
-    //   }, 700)
-    //   return () => clearTimeout(timer)
-    // }
     // Auto-launch walkthrough only for clean first-time visits (not during auth redirects or errors)
     const hasSeenWalkthrough = localStorage.getItem('trendnorth_walkthrough_seen')
     const isAuthRedirect = window.location.hash.includes('access_token') || 
                            window.location.hash.includes('error') || 
-                           window.location.search.includes('code=')
+                           window.location.search.includes('code=') ||
+                           window.location.search.includes('auth_error') ||
+                           window.location.search.includes('error=')
 
     if (!hasSeenWalkthrough && !isAuthRedirect) {
       const timer = setTimeout(() => {
@@ -408,6 +402,12 @@ export default function Dashboard() {
       setUser(session?.user ?? null)
       if (session?.user) {
         fetchCloudPositions(session.user.id)
+
+        // Clean up URL parameters (e.g. ?auth_error=true or #access_token) on successful auth
+        if (window.location.search || window.location.hash) {
+          const cleanUrl = window.location.origin + window.location.pathname
+          window.history.replaceState({}, document.title, cleanUrl)
+        }
       }
     })
 
@@ -446,8 +446,8 @@ export default function Dashboard() {
   }
 
   // Walkthrough Dismiss / Complete Handler
-  const handleCloseWalkthrough = () => {
-    if (dontShowAgain) {
+  const handleCloseWalkthrough = (completed = false) => {
+    if (dontShowAgain || completed) {
       localStorage.setItem('trendnorth_walkthrough_seen', 'true')
     }
     setIsWalkthroughOpen(false)
@@ -2527,7 +2527,7 @@ export default function Dashboard() {
 
               <button
                 type="button"
-                onClick={handleCloseWalkthrough}
+                onClick={() => handleCloseWalkthrough(false)}
                 className="text-slate-400 hover:text-slate-600 dark:hover:text-white cursor-pointer p-1 rounded-lg"
                 title="Skip Tour"
               >
@@ -2597,7 +2597,7 @@ export default function Dashboard() {
                 ) : (
                   <Button
                     size="sm"
-                    onClick={handleCloseWalkthrough}
+                    onClick={() => handleCloseWalkthrough(true)}
                     className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs gap-1 cursor-pointer shadow-md shadow-emerald-600/20"
                   >
                     <Check className="h-3.5 w-3.5" /> Got it! Start Exploring
