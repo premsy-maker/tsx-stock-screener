@@ -371,9 +371,21 @@ export default function Dashboard() {
       setTheme(savedTheme)
     }
 
-    // Auto-launch walkthrough if first time
+    // // Auto-launch walkthrough if first time
+    // const hasSeenWalkthrough = localStorage.getItem('trendnorth_walkthrough_seen')
+    // if (!hasSeenWalkthrough) {
+    //   const timer = setTimeout(() => {
+    //     setIsWalkthroughOpen(true)
+    //   }, 700)
+    //   return () => clearTimeout(timer)
+    // }
+    // Auto-launch walkthrough only for clean first-time visits (not during auth redirects or errors)
     const hasSeenWalkthrough = localStorage.getItem('trendnorth_walkthrough_seen')
-    if (!hasSeenWalkthrough) {
+    const isAuthRedirect = window.location.hash.includes('access_token') || 
+                           window.location.hash.includes('error') || 
+                           window.location.search.includes('code=')
+
+    if (!hasSeenWalkthrough && !isAuthRedirect) {
       const timer = setTimeout(() => {
         setIsWalkthroughOpen(true)
       }, 700)
