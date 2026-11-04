@@ -19,7 +19,7 @@ import {
   BookmarkPlus, BookmarkX, Briefcase, Sun, Moon,
   ShieldAlert, Info, MessageSquareText, X, Send,
   LogOut, Cloud, Activity, ShieldCheck, Calendar,
-  Edit2
+  Edit2, HelpCircle, ChevronLeft, Sparkles
 } from 'lucide-react'
 
 interface PocketPosition {
@@ -73,6 +73,94 @@ export function getSignalConfig(rawSignal: string, isDark: boolean) {
     textColor: isDark ? 'text-slate-300' : 'text-slate-700'
   }
 }
+
+// 4 COMPLIANT, EDUCATIONAL WALKTHROUGH STEPS
+const TUTORIAL_STEPS = [
+  {
+    step: 1,
+    badge: 'Momentum & Trend Regimes',
+    title: 'Quantitative Regimes: RSI & Moving Averages',
+    icon: Activity,
+    color: 'text-sky-400',
+    description:
+      'TrendNorth filters Canadian securities mathematically to eliminate emotional bias. Rather than guessing entries, our engine tracks multi-timeframe moving average alignments and momentum oscillators.',
+    bullets: [
+      {
+        term: 'Oversold Pullback',
+        desc: 'Identifies assets where secular trend is bullish (50D SMA ≥ 200D SMA), but near-term selling pressure has dragged 14-day RSI into discount territory (RSI ≤ 40.0).'
+      },
+      {
+        term: 'Trend Breakdown',
+        desc: 'Occurs when the medium-term 50-day average crosses below the 200-day average (Death Cross), modeling potential institutional distribution.'
+      },
+      {
+        term: 'Momentum Overextended',
+        desc: 'Flags velocity exhaustion when 14-day RSI reaches or exceeds 75.0.'
+      }
+    ]
+  },
+  {
+    step: 2,
+    badge: 'Wilder\'s Volatility Model',
+    title: '14-Day Average True Range (ATR) & Risk Bounds',
+    icon: ShieldCheck,
+    color: 'text-amber-400',
+    description:
+      'Every equity has an idiosyncratic daily volatility signature. We utilize Welles Wilder\'s 14-day Average True Range (ATR) so risk parameters reflect statistical asset variance rather than arbitrary dollar amounts.',
+    bullets: [
+      {
+        term: '14D ATR Metric',
+        desc: 'The average high-to-low price span over the past 14 trading sessions, establishing the expected daily volatility threshold.'
+      },
+      {
+        term: 'Model Invalidation Stop (2x ATR)',
+        desc: 'Calculated as [Current Price - (2 × ATR)]. Placing model benchmarks beyond twice the daily volatility buffers against normal market noise while signaling structural invalidation if breached.'
+      }
+    ]
+  },
+  {
+    step: 3,
+    badge: 'Expansion Projections',
+    title: 'Mathematical Swing Targets (3x ATR)',
+    icon: Target,
+    color: 'text-emerald-400',
+    description:
+      'Objective profit projections remove the greed factor from swing trade research. Targets are programmatically anchored to measurable volatility expansions.',
+    bullets: [
+      {
+        term: 'Target (3x ATR)',
+        desc: 'Calculated as [Current Price + (3 × ATR)], representing approximately three daily candles of directional expansion.'
+      },
+      {
+        term: '1.5:1 Risk/Reward Ratio',
+        desc: 'With a 2x ATR invalidation stop and a 3x ATR expansion target, every modeled setup enforces an objective 1.5:1 mathematical risk-to-reward baseline.'
+      }
+    ]
+  },
+  {
+    step: 4,
+    badge: 'Paper Ledger & Cloud Sync',
+    title: 'Pocket Trader & Real-Time Sync',
+    icon: Briefcase,
+    color: 'text-indigo-400',
+    description:
+      'The Pocket Trader tab is a self-directed portfolio simulation and tracking terminal. It calculates real-time unrealized P&L, days held, and target progress against live TSX quotes.',
+    bullets: [
+      {
+        term: 'Fractional Share Tracking',
+        desc: 'Log exact share quantities with 4-decimal precision (e.g., 0.6028 shs) matching brokerage accounts like Wealthsimple.'
+      },
+      {
+        term: 'Interactive Date Picker & Inline Editing',
+        desc: 'Select entry dates via calendar popup or manual typing, and modify existing positions via the in-place pencil edit button.'
+      },
+      {
+        term: 'Cloud Synchronization',
+        desc: 'Sign in with Google to synchronize your tracked portfolio across desktop and mobile devices via Supabase.'
+      }
+    ]
+  }
+]
 
 export default function Dashboard() {
   const [stocks, setStocks] = useState<ScreenerRecord[]>([])
@@ -135,6 +223,11 @@ export default function Dashboard() {
   const [newShares, setNewShares] = useState<string>('1')
   const [newTargetGain, setNewTargetGain] = useState<string>('10')
   const [newStopLoss, setNewStopLoss] = useState<string>('')
+
+  // Guided Walkthrough State
+  const [isWalkthroughOpen, setIsWalkthroughOpen] = useState(false)
+  const [walkthroughStep, setWalkthroughStep] = useState(0)
+  const [dontShowAgain, setDontShowAgain] = useState(false)
 
   // Feedback State
   const [isFeedbackOpen, setIsFeedbackOpen] = useState(false)
@@ -278,6 +371,15 @@ export default function Dashboard() {
       setTheme(savedTheme)
     }
 
+    // Auto-launch walkthrough if first time
+    const hasSeenWalkthrough = localStorage.getItem('trendnorth_walkthrough_seen')
+    if (!hasSeenWalkthrough) {
+      const timer = setTimeout(() => {
+        setIsWalkthroughOpen(true)
+      }, 700)
+      return () => clearTimeout(timer)
+    }
+
     supabase.auth.getSession().then(({ data: { session } }) => {
       setUser(session?.user ?? null)
       if (session?.user) {
@@ -329,6 +431,19 @@ export default function Dashboard() {
     const nextTheme: ThemeMode = theme === 'dark' ? 'light' : 'dark'
     setTheme(nextTheme)
     localStorage.setItem('trendnorth_theme', nextTheme)
+  }
+
+  // Walkthrough Dismiss / Complete Handler
+  const handleCloseWalkthrough = () => {
+    if (dontShowAgain) {
+      localStorage.setItem('trendnorth_walkthrough_seen', 'true')
+    }
+    setIsWalkthroughOpen(false)
+  }
+
+  const handleManualOpenTour = () => {
+    setWalkthroughStep(0)
+    setIsWalkthroughOpen(true)
   }
 
   const handleFeedbackSubmit = async (e: React.FormEvent) => {
@@ -470,7 +585,6 @@ export default function Dashboard() {
     }
 
     if (editingPositionId) {
-      // EDIT EXISTING POSITION
       if (user) {
         const updatePayload: Record<string, any> = {
           symbol: posData.symbol,
@@ -497,7 +611,6 @@ export default function Dashboard() {
         updatePositions(updated)
       }
     } else {
-      // INSERT NEW POSITION
       if (user) {
         const insertPayload: Record<string, any> = {
           user_id: user.id,
@@ -993,19 +1106,19 @@ export default function Dashboard() {
                   </span>
                 </div>
                 <p className="leading-relaxed text-[11px]">
-                  TrendNorth is an algorithmic market research and technical screening tool designed exclusively for educational purposes. <strong>TrendNorth is not registered as an investment adviser, portfolio manager, or broker-dealer</strong> with the Ontario Securities Commission (OSC), the Canadian Investment Regulatory Organization (CIRO), the U.S. SEC, or any other financial regulatory agency.
+                  TrendNorth is an algorithmic market research and technical screening tool designed exclusively for educational purposes[cite: 1, 2]. <strong>TrendNorth is not registered as an investment adviser, portfolio manager, or broker-dealer</strong> with the Ontario Securities Commission (OSC), the Canadian Investment Regulatory Organization (CIRO), the U.S. SEC, or any other financial regulatory agency[cite: 1, 2].
                 </p>
                 <p className="leading-relaxed text-[11px]">
-                  Technical conditions and volatility-based thresholds represent programmatic calculations derived from mathematical models applied to delayed market data. <strong>These mathematical outputs do not constitute investment advice, financial planning, or a recommendation to purchase or sell any security.</strong>
+                  Technical conditions and volatility-based thresholds represent programmatic calculations derived from mathematical models applied to delayed market data[cite: 1, 2]. <strong>These mathematical outputs do not constitute investment advice, financial planning, or a recommendation to purchase or sell any security[cite: 1, 2].</strong>
                 </p>
               </div>
 
               <div className="max-w-md space-y-2 text-[11px]">
                 <p className="leading-relaxed">
-                  <strong>Risk of Capital Loss:</strong> Trading Canadian equities involves substantial financial risk, including the loss of principal. Past technical patterns, historical moving average alignments, and mathematical indicators provide no guarantee of future price performance.
+                  <strong>Risk of Capital Loss:</strong> Trading Canadian equities involves substantial financial risk, including the loss of principal[cite: 1, 2]. Past technical patterns, historical moving average alignments, and mathematical indicators provide no guarantee of future price performance[cite: 1, 2].
                 </p>
                 <p className="text-slate-500 dark:text-slate-400">
-                  Market prices are delayed and retrieved via public endpoints on an "as-is" basis. Always consult an independent, licensed financial advisor before making investment decisions.
+                  Market prices are delayed and retrieved via public endpoints on an "as-is" basis[cite: 2]. Always consult an independent, licensed financial advisor before making investment decisions[cite: 1, 2].
                 </p>
               </div>
             </div>
@@ -1019,6 +1132,10 @@ export default function Dashboard() {
       </div>
     )
   }
+
+  // Current active step details for the walkthrough
+  const currentTourStep = TUTORIAL_STEPS[walkthroughStep]
+  const TourIcon = currentTourStep.icon
 
   // VIEW 2: MAIN DASHBOARD
   return (
@@ -1042,6 +1159,18 @@ export default function Dashboard() {
           </div>
 
           <div className="flex items-center space-x-3">
+            {/* Quick Tour Button */}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleManualOpenTour}
+              className={`h-9 px-3 gap-1.5 text-xs font-bold cursor-pointer ${isDark ? 'bg-slate-800 hover:bg-slate-700 text-sky-400 border-slate-700' : 'bg-slate-100 hover:bg-slate-200 text-sky-600 border-slate-300'}`}
+              title="Open Educational Tour"
+            >
+              <HelpCircle className="h-4 w-4" />
+              <span className="hidden sm:inline">Quick Tour</span>
+            </Button>
+
             <Button
               variant="outline"
               size="sm"
@@ -1988,7 +2117,7 @@ export default function Dashboard() {
                 </div>
 
                 <div className={`p-4 rounded-xl border text-[11px] leading-relaxed ${isDark ? 'bg-slate-950/80 border-slate-800 text-slate-400' : 'bg-slate-100 border-slate-200 text-slate-600'}`}>
-                  <strong>Notice:</strong> TrendNorth Analytics provides mathematical screening models and technical momentum research for self-directed investors. All signals, metrics, and indicators are generated programmatically for educational analysis and do not constitute personalized financial, tax, or investment advice.
+                  <strong>Notice:</strong> TrendNorth Analytics provides mathematical screening models and technical momentum research for self-directed investors[cite: 1, 2]. All signals, metrics, and indicators are generated programmatically for educational analysis and do not constitute personalized financial, tax, or investment advice[cite: 1, 2].
                 </div>
               </div>
             </TabsContent>
@@ -2009,19 +2138,19 @@ export default function Dashboard() {
                 </span>
               </div>
               <p className="leading-relaxed text-[11px]">
-                TrendNorth is an algorithmic market research and technical screening tool designed exclusively for educational purposes. <strong>TrendNorth is not registered as an investment adviser, portfolio manager, or broker-dealer</strong> with the Ontario Securities Commission (OSC), the Canadian Investment Regulatory Organization (CIRO), the U.S. SEC, or any other financial regulatory agency.
+                TrendNorth is an algorithmic market research and technical screening tool designed exclusively for educational purposes[cite: 1, 2]. <strong>TrendNorth is not registered as an investment adviser, portfolio manager, or broker-dealer</strong> with the Ontario Securities Commission (OSC), the Canadian Investment Regulatory Organization (CIRO), the U.S. SEC, or any other financial regulatory agency[cite: 1, 2].
               </p>
               <p className="leading-relaxed text-[11px]">
-                Technical conditions and volatility-based thresholds represent programmatic calculations derived from mathematical models applied to delayed market data. <strong>These mathematical outputs do not constitute investment advice, financial planning, or a recommendation to purchase or sell any security.</strong>
+                Technical conditions and volatility-based thresholds represent programmatic calculations derived from mathematical models applied to delayed market data[cite: 1, 2]. <strong>These mathematical outputs do not constitute investment advice, financial planning, or a recommendation to purchase or sell any security[cite: 1, 2].</strong>
               </p>
             </div>
 
             <div className="max-w-md space-y-2 text-[11px]">
               <p className="leading-relaxed">
-                <strong>Risk of Capital Loss:</strong> Trading Canadian equities involves substantial financial risk, including the loss of principal. Past technical patterns, historical moving average alignments, and mathematical indicators provide no guarantee of future price performance.
+                <strong>Risk of Capital Loss:</strong> Trading Canadian equities involves substantial financial risk, including the loss of principal[cite: 1, 2]. Past technical patterns, historical moving average alignments, and mathematical indicators provide no guarantee of future price performance[cite: 1, 2].
               </p>
               <p className="text-slate-500 dark:text-slate-400">
-                Market prices are delayed and retrieved via public endpoints on an "as-is" basis. Always consult an independent, licensed financial advisor before making investment decisions.
+                Market prices are delayed and retrieved via public endpoints on an "as-is" basis[cite: 2]. Always consult an independent, licensed financial advisor before making investment decisions[cite: 1, 2].
               </p>
             </div>
           </div>
@@ -2359,6 +2488,114 @@ export default function Dashboard() {
           </form>
         </SheetContent>
       </Sheet>
+
+      {/* INTERACTIVE GUIDED EDUCATIONAL WALKTHROUGH MODAL */}
+      {isWalkthroughOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-xs animate-in fade-in duration-200">
+          <div 
+            className={`w-full max-w-xl rounded-2xl border shadow-2xl p-6 sm:p-7 relative transition-all ${
+              isDark ? 'bg-slate-900 border-slate-700 text-slate-100' : 'bg-white border-slate-200 text-slate-900'
+            }`}
+          >
+            {/* Header with Step Tracker */}
+            <div className="flex items-center justify-between pb-4 border-b border-slate-200 dark:border-slate-800">
+              <div className="flex items-center gap-2.5">
+                <div className={`p-2 rounded-xl bg-sky-500/10 border border-sky-500/20 ${currentTourStep.color}`}>
+                  <TourIcon className="h-5 w-5" />
+                </div>
+                <div>
+                  <span className="text-[11px] font-extrabold uppercase tracking-wider text-sky-500 flex items-center gap-1.5">
+                    <Sparkles className="h-3 w-3" /> Step {currentTourStep.step} of {TUTORIAL_STEPS.length} • {currentTourStep.badge}
+                  </span>
+                  <h3 className={`text-base font-black tracking-tight ${themeTextColor}`}>
+                    {currentTourStep.title}
+                  </h3>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={handleCloseWalkthrough}
+                className="text-slate-400 hover:text-slate-600 dark:hover:text-white cursor-pointer p-1 rounded-lg"
+                title="Skip Tour"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {/* Body */}
+            <div className="py-4 space-y-4 text-xs sm:text-sm">
+              <p className={`leading-relaxed ${themeMutedColor}`}>
+                {currentTourStep.description}
+              </p>
+
+              <div className={`space-y-2 p-3.5 rounded-xl border ${isDark ? 'bg-slate-950/70 border-slate-800' : 'bg-slate-50 border-slate-200'}`}>
+                {currentTourStep.bullets.map((b, i) => (
+                  <div key={i} className="flex items-start gap-2 text-xs leading-relaxed">
+                    <span className="h-1.5 w-1.5 rounded-full bg-sky-500 shrink-0 mt-1.5" />
+                    <span className={themeMutedColor}>
+                      <strong className={themeTextColor}>{b.term}: </strong>
+                      {b.desc}
+                    </span>
+                  </div>
+                ))}
+              </div>
+
+              {/* Compliance Micro-Disclaimer */}
+              <div className="p-2.5 rounded-lg border border-amber-500/20 bg-amber-500/5 text-[11px] text-amber-500/90 leading-tight flex items-start gap-1.5">
+                <ShieldAlert className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+                <span>
+                  <strong>Educational Scope:</strong> Models represent mathematical formulas on delayed market data and do not constitute financial advice or transaction orders[cite: 1, 2].
+                </span>
+              </div>
+            </div>
+
+            {/* Footer with Navigation Controls */}
+            <div className="pt-4 border-t border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-3">
+              <label className="flex items-center gap-2 cursor-pointer text-xs text-slate-400 select-none">
+                <input
+                  type="checkbox"
+                  checked={dontShowAgain}
+                  onChange={(e) => setDontShowAgain(e.target.checked)}
+                  className="rounded border-slate-600 text-sky-600 focus:ring-sky-500"
+                />
+                <span>Don&apos;t show on launch</span>
+              </label>
+
+              <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+                {walkthroughStep > 0 && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setWalkthroughStep(prev => prev - 1)}
+                    className={`text-xs font-bold gap-1 cursor-pointer ${isDark ? 'bg-slate-800 border-slate-700 text-slate-200' : 'bg-white border-slate-300 text-slate-700'}`}
+                  >
+                    <ChevronLeft className="h-3.5 w-3.5" /> Prev
+                  </Button>
+                )}
+
+                {walkthroughStep < TUTORIAL_STEPS.length - 1 ? (
+                  <Button
+                    size="sm"
+                    onClick={() => setWalkthroughStep(prev => prev + 1)}
+                    className="bg-sky-600 hover:bg-sky-500 text-white font-bold text-xs gap-1 cursor-pointer"
+                  >
+                    Next <ChevronRight className="h-3.5 w-3.5" />
+                  </Button>
+                ) : (
+                  <Button
+                    size="sm"
+                    onClick={handleCloseWalkthrough}
+                    className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs gap-1 cursor-pointer shadow-md shadow-emerald-600/20"
+                  >
+                    <Check className="h-3.5 w-3.5" /> Got it! Start Exploring
+                  </Button>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
