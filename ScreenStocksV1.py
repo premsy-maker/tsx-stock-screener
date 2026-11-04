@@ -1,5 +1,6 @@
 import os
 from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 import yfinance as yf
 import pandas as pd
 from tabulate import tabulate
@@ -280,7 +281,10 @@ def push_to_supabase(df: pd.DataFrame):
         db_df.rename(columns=rename_map, inplace=True)
 
         # Stamp all rows with an identical UTC scan timestamp
-        scan_time = datetime.now(timezone.utc).isoformat()
+        # scan_time = datetime.now(timezone.utc).isoformat()
+        # db_df["scan_timestamp"] = scan_time
+        # Stamp all rows with explicit Eastern Time (ET) ISO format
+        scan_time = datetime.now(ZoneInfo("America/New_York")).isoformat()
         db_df["scan_timestamp"] = scan_time
 
         cols_to_keep = [

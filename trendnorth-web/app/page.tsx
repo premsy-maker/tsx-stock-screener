@@ -178,7 +178,31 @@ const TUTORIAL_STEPS = [
     ]
   }
 ]
+// Helper to format scan timestamps reliably into Eastern Time (ET)
+function formatScanTimeToET(timestampStr: string | null): string {
+  if (!timestampStr) return '--:--'
+  try {
+    // If it's a raw ISO string without explicit offset, treat as UTC
+    const isoString =
+      timestampStr.endsWith('Z') || timestampStr.includes('+') || timestampStr.includes('-')
+        ? timestampStr
+        : `${timestampStr}Z`
 
+    const date = new Date(isoString)
+    if (isNaN(date.getTime())) {
+      return timestampStr.slice(11, 16)
+    }
+
+    return new Intl.DateTimeFormat('en-US', {
+      timeZone: 'America/New_York',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false // 24-hr format: "10:33". Set to true for "10:33 AM"
+    }).format(date)
+  } catch {
+    return timestampStr.slice(11, 16)
+  }
+}
 export default function Dashboard() {
   const [stocks, setStocks] = useState<ScreenerRecord[]>([])
   const [loading, setLoading] = useState(true)
@@ -1296,13 +1320,14 @@ export default function Dashboard() {
               {isDark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4 text-sky-600" />}
               <span className="hidden sm:inline">{isDark ? 'Light Mode' : 'Dark Mode'}</span>
             </Button>
-
-            {lastScanTime && (
+            
+          {lastScanTime && (
               <span className={`text-xs font-semibold px-3 py-1 rounded-full hidden sm:inline-flex items-center gap-1.5 border ${isDark ? 'text-slate-200 bg-slate-800 border-slate-700' : 'text-slate-700 bg-slate-100 border-slate-200'}`}>
                 <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
-                Engine Scan: {lastScanTime.slice(11, 16)} ET
+                Engine Scan: {formatScanTimeToET(lastScanTime)} ET
               </span>
             )}
+
             
             <Button 
               variant="outline" 
