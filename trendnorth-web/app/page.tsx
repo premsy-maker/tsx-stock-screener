@@ -1272,7 +1272,20 @@ export default function Dashboard() {
               <HelpCircle className="h-4 w-4" />
               <span className="hidden sm:inline">Quick Tour</span>
             </Button>
-
+            {/* Ko-fi Support Button */}
+<a 
+  href="https://ko-fi.com/siak36187" 
+  target="_blank" 
+  rel="noopener noreferrer"
+  className={`hidden sm:inline-flex items-center gap-1.5 h-9 px-3 rounded-lg border text-xs font-bold cursor-pointer transition-colors ${
+    isDark 
+      ? 'bg-slate-800 hover:bg-slate-700 text-amber-400 border-slate-700' 
+      : 'bg-slate-100 hover:bg-slate-200 text-amber-600 border-slate-300'
+  }`}
+  title="Support TrendNorth Development"
+>
+  <span>☕ Support</span>
+</a>
             <Button
               variant="outline"
               size="sm"
