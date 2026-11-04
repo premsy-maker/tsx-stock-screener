@@ -393,15 +393,15 @@ export default function Dashboard() {
   }
 
   const handleSelectPocketStock = (sym: string, companyName?: string) => {
-    let cleanSym = sym.trim().toUpperCase()
-    if (!cleanSym.includes('.') && !cleanSym.endsWith('.TO')) {
-      cleanSym = `${cleanSym}.TO`
+    let rawSym = sym.split('—')[0].split('-')[0].trim().toUpperCase()
+    if (!rawSym.includes('.') && !rawSym.endsWith('.TO')) {
+      rawSym = `${rawSym}.TO`
     }
-    setNewSymbol(cleanSym)
-    setSheetSearchInput(`${cleanSym}${companyName ? ` — ${companyName}` : ''}`)
+    setNewSymbol(rawSym)
+    setSheetSearchInput(companyName ? `${rawSym} — ${companyName}` : rawSym)
     setIsSheetSearchOpen(false)
 
-    const match = stocks.find(s => s.symbol === cleanSym)
+    const match = stocks.find(s => s.symbol === rawSym)
     if (match && match.price) {
       setNewBuyPrice(String(match.price))
       if (match.atr_14) {
@@ -411,35 +411,56 @@ export default function Dashboard() {
     }
   }
 
-  // ALLOWS FRACTIONAL SHARES WITH PROPER PRECISION PARSING
   const handleAddPosition = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!newSymbol) return
-    const fallbackDate = newBuyDate || '2026-11-03'
+    
+    let cleanSym = (newSymbol || sheetSearchInput).split('—')[0].split('-')[0].trim().toUpperCase()
+    if (!cleanSym) return
+    if (!cleanSym.includes('.') && !cleanSym.endsWith('.TO')) {
+      cleanSym = `${cleanSym}.TO`
+    }
+
+    const fallbackDate = newBuyDate || new Date().toISOString().split('T')[0]
+    const parsedShares = parseFloat(newShares)
+    const parsedPrice = parseFloat(newBuyPrice)
+    const parsedTarget = parseFloat(newTargetGain)
+    const parsedStop = newStopLoss ? parseFloat(newStopLoss) : undefined
+
     const newPosData = {
-      symbol: newSymbol,
+      symbol: cleanSym,
       buyDate: fallbackDate,
-      buyPrice: parseFloat(newBuyPrice) || 0,
-      shares: parseFloat(newShares) || 0.0001, // Fractional share support
-      targetGain: parseFloat(newTargetGain) || 1,
-      stopLoss: newStopLoss ? parseFloat(newStopLoss) : undefined
+      buyPrice: isNaN(parsedPrice) ? 0 : parsedPrice,
+      shares: isNaN(parsedShares) || parsedShares <= 0 ? 1 : parsedShares,
+      targetGain: isNaN(parsedTarget) ? 1 : parsedTarget,
+      stopLoss: parsedStop !== undefined && !isNaN(parsedStop) ? parsedStop : undefined
     }
 
     if (user) {
+      const insertPayload: Record<string, any> = {
+        user_id: user.id,
+        symbol: newPosData.symbol,
+        buy_date: newPosData.buyDate,
+        buy_price: newPosData.buyPrice,
+        shares: newPosData.shares,
+        target_gain: newPosData.targetGain
+      }
+
+      if (newPosData.stopLoss !== undefined) {
+        insertPayload.stop_loss = newPosData.stopLoss
+      }
+
       const { data, error } = await supabase
         .from('user_positions')
-        .insert([{
-          user_id: user.id,
-          symbol: newPosData.symbol,
-          buy_date: newPosData.buyDate,
-          buy_price: newPosData.buyPrice,
-          shares: newPosData.shares,
-          target_gain: newPosData.targetGain,
-          stop_loss: newPosData.stopLoss
-        }])
+        .insert([insertPayload])
         .select()
 
-      if (data && !error) {
+      if (error) {
+        console.error('Supabase user_positions insert error:', error.message, error.details)
+        alert(`Failed to save position: ${error.message}`)
+        return
+      }
+
+      if (data && data.length > 0) {
         const added: PocketPosition = {
           id: data[0].id,
           ...newPosData,
@@ -448,12 +469,16 @@ export default function Dashboard() {
       }
     } else {
       const localPos: PocketPosition = {
-        id: `${newSymbol}-${Date.now()}`,
+        id: `${cleanSym}-${Date.now()}`,
         ...newPosData,
       }
       updatePositions([...positions, localPos])
     }
+
     setIsSheetOpen(false)
+    setSheetSearchInput('')
+    setNewSymbol('')
+    setNewStopLoss('')
   }
 
   const handleRemovePosition = async (id: string) => {
@@ -601,8 +626,6 @@ export default function Dashboard() {
 
       const isTargetReached = currentPrice >= targetPrice
       const targetProgress = Math.min(100, Math.max(0, ((currentPrice - pos.buyPrice) / (pos.targetGain || 1)) * 100))
-      
-      // Stop loss verification
       const isStopBreached = pos.stopLoss ? currentPrice <= pos.stopLoss : false
 
       return {
@@ -773,6 +796,7 @@ export default function Dashboard() {
               </div>
             </div>
 
+            {/* TradingView Chart */}
             <div className={`rounded-2xl border ${themeBorder} overflow-hidden shadow-xl ${isDark ? 'bg-slate-950' : 'bg-white'}`}>
               <div className="h-[460px] w-full">
                 <iframe
@@ -1417,7 +1441,7 @@ export default function Dashboard() {
                                     {stock.symbol}
                                   </span>
 
-                                  {heldShares && (
+                                  {heldShares !== undefined && (
                                     <Badge 
                                       variant="outline" 
                                       onClick={() => setActiveTab('pocket')}
@@ -2156,7 +2180,7 @@ export default function Dashboard() {
             )}
 
             <div className="grid grid-cols-2 gap-3">
-              {/* INTERACTIVE DATE PICKER + DIRECT TYPING */}
+              {/* Interactive Date Picker + Direct Typing */}
               <div className="space-y-1.5">
                 <div className="flex items-center justify-between">
                   <Label htmlFor="date" className={`text-xs font-bold ${themeTextColor}`}>Entry Date</Label>
@@ -2181,7 +2205,7 @@ export default function Dashboard() {
                 </div>
               </div>
 
-              {/* FRACTIONAL SHARES INPUT */}
+              {/* Fractional Shares Input */}
               <div className="space-y-1.5">
                 <div className="flex items-center justify-between">
                   <Label htmlFor="shares" className={`text-xs font-bold ${themeTextColor}`}>Shares Count</Label>
