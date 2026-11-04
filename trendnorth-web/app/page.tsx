@@ -18,7 +18,8 @@ import {
   Check, SlidersHorizontal, ChevronDown, RotateCcw,
   BookmarkPlus, BookmarkX, Briefcase, Sun, Moon,
   ShieldAlert, Info, MessageSquareText, X, Send,
-  LogOut, Cloud, Activity, ShieldCheck, Calendar
+  LogOut, Cloud, Activity, ShieldCheck, Calendar,
+  Edit2
 } from 'lucide-react'
 
 interface PocketPosition {
@@ -121,6 +122,7 @@ export default function Dashboard() {
   // Pocket Trader State
   const [positions, setPositions] = useState<PocketPosition[]>([])
   const [isSheetOpen, setIsSheetOpen] = useState(false)
+  const [editingPositionId, setEditingPositionId] = useState<string | null>(null)
   
   // Searchable Drawer State
   const [sheetSearchInput, setSheetSearchInput] = useState('')
@@ -411,7 +413,39 @@ export default function Dashboard() {
     }
   }
 
-  const handleAddPosition = async (e: React.FormEvent) => {
+  // Open Drawer in Edit Mode
+  const handleOpenEditPosition = (pos: PocketPosition) => {
+    setEditingPositionId(pos.id)
+    setNewSymbol(pos.symbol)
+    const comp = EXTENDED_TSX_CATALOG[pos.symbol] || ''
+    setSheetSearchInput(comp ? `${pos.symbol} — ${comp}` : pos.symbol)
+    setNewBuyDate(pos.buyDate)
+    setNewBuyPrice(String(pos.buyPrice))
+    setNewShares(String(pos.shares))
+    setNewTargetGain(String(pos.targetGain))
+    setNewStopLoss(pos.stopLoss ? String(pos.stopLoss) : '')
+    setIsSheetOpen(true)
+  }
+
+  // Open Drawer in New Position Mode
+  const handleOpenAddPosition = () => {
+    setEditingPositionId(null)
+    if (stocks.length > 0) {
+      handleSelectPocketStock(stocks[0].symbol, stocks[0].company)
+    } else {
+      setNewSymbol('')
+      setSheetSearchInput('')
+      setNewBuyPrice('0')
+    }
+    setNewBuyDate(new Date().toISOString().split('T')[0])
+    setNewShares('1')
+    setNewTargetGain('10')
+    setNewStopLoss('')
+    setIsSheetOpen(true)
+  }
+
+  // Add or Update Position
+  const handleSavePosition = async (e: React.FormEvent) => {
     e.preventDefault()
     
     let cleanSym = (newSymbol || sheetSearchInput).split('—')[0].split('-')[0].trim().toUpperCase()
@@ -426,7 +460,7 @@ export default function Dashboard() {
     const parsedTarget = parseFloat(newTargetGain)
     const parsedStop = newStopLoss ? parseFloat(newStopLoss) : undefined
 
-    const newPosData = {
+    const posData = {
       symbol: cleanSym,
       buyDate: fallbackDate,
       buyPrice: isNaN(parsedPrice) ? 0 : parsedPrice,
@@ -435,50 +469,72 @@ export default function Dashboard() {
       stopLoss: parsedStop !== undefined && !isNaN(parsedStop) ? parsedStop : undefined
     }
 
-    if (user) {
-      const insertPayload: Record<string, any> = {
-        user_id: user.id,
-        symbol: newPosData.symbol,
-        buy_date: newPosData.buyDate,
-        buy_price: newPosData.buyPrice,
-        shares: newPosData.shares,
-        target_gain: newPosData.targetGain
-      }
-
-      if (newPosData.stopLoss !== undefined) {
-        insertPayload.stop_loss = newPosData.stopLoss
-      }
-
-      const { data, error } = await supabase
-        .from('user_positions')
-        .insert([insertPayload])
-        .select()
-
-      if (error) {
-        console.error('Supabase user_positions insert error:', error.message, error.details)
-        alert(`Failed to save position: ${error.message}`)
-        return
-      }
-
-      if (data && data.length > 0) {
-        const added: PocketPosition = {
-          id: data[0].id,
-          ...newPosData,
+    if (editingPositionId) {
+      // EDIT EXISTING POSITION
+      if (user) {
+        const updatePayload: Record<string, any> = {
+          symbol: posData.symbol,
+          buy_date: posData.buyDate,
+          buy_price: posData.buyPrice,
+          shares: posData.shares,
+          target_gain: posData.targetGain,
+          stop_loss: posData.stopLoss ?? null
         }
-        setPositions(prev => [...prev, added])
+
+        const { error } = await supabase
+          .from('user_positions')
+          .update(updatePayload)
+          .eq('id', editingPositionId)
+
+        if (error) {
+          alert(`Failed to update position: ${error.message}`)
+          return
+        }
+
+        setPositions(prev => prev.map(p => p.id === editingPositionId ? { id: editingPositionId, ...posData } : p))
+      } else {
+        const updated = positions.map(p => p.id === editingPositionId ? { id: editingPositionId, ...posData } : p)
+        updatePositions(updated)
       }
     } else {
-      const localPos: PocketPosition = {
-        id: `${cleanSym}-${Date.now()}`,
-        ...newPosData,
+      // INSERT NEW POSITION
+      if (user) {
+        const insertPayload: Record<string, any> = {
+          user_id: user.id,
+          symbol: posData.symbol,
+          buy_date: posData.buyDate,
+          buy_price: posData.buyPrice,
+          shares: posData.shares,
+          target_gain: posData.targetGain
+        }
+        if (posData.stopLoss !== undefined) {
+          insertPayload.stop_loss = posData.stopLoss
+        }
+
+        const { data, error } = await supabase
+          .from('user_positions')
+          .insert([insertPayload])
+          .select()
+
+        if (error) {
+          alert(`Failed to save position: ${error.message}`)
+          return
+        }
+
+        if (data && data.length > 0) {
+          setPositions(prev => [...prev, { id: data[0].id, ...posData }])
+        }
+      } else {
+        const localPos: PocketPosition = {
+          id: `${cleanSym}-${Date.now()}`,
+          ...posData,
+        }
+        updatePositions([...positions, localPos])
       }
-      updatePositions([...positions, localPos])
     }
 
     setIsSheetOpen(false)
-    setSheetSearchInput('')
-    setNewSymbol('')
-    setNewStopLoss('')
+    setEditingPositionId(null)
   }
 
   const handleRemovePosition = async (id: string) => {
@@ -913,6 +969,7 @@ export default function Dashboard() {
                 onClick={() => {
                   handleSelectPocketStock(s.symbol, s.company)
                   setActiveStockDetail(null)
+                  setEditingPositionId(null)
                   setIsSheetOpen(true)
                 }}
                 className="bg-sky-600 hover:bg-sky-500 text-white text-xs font-bold gap-1.5 cursor-pointer shadow-md shadow-sky-600/20"
@@ -1494,6 +1551,7 @@ export default function Dashboard() {
                                   size="sm"
                                   onClick={() => {
                                     handleSelectPocketStock(stock.symbol, stock.company)
+                                    setEditingPositionId(null)
                                     setIsSheetOpen(true)
                                   }}
                                   className={`h-7 px-2 text-xs font-bold ${isDark ? 'text-slate-300 hover:text-white hover:bg-slate-800' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200'}`}
@@ -1536,12 +1594,7 @@ export default function Dashboard() {
 
                   <Button 
                     size="sm" 
-                    onClick={() => {
-                      if (!newSymbol && stocks.length > 0) {
-                        handleSelectPocketStock(stocks[0].symbol, stocks[0].company)
-                      }
-                      setIsSheetOpen(true)
-                    }}
+                    onClick={handleOpenAddPosition}
                     className="gap-1.5 bg-sky-600 hover:bg-sky-500 text-white text-xs font-bold cursor-pointer shadow-md shadow-sky-600/20"
                   >
                     <Plus className="h-4 w-4" /> Add Position
@@ -1681,14 +1734,24 @@ export default function Dashboard() {
                                   {sigCfg.label}
                                 </Badge>
                               </td>
-                              <td className="px-4 py-3.5 text-right">
+                              <td className="px-4 py-3.5 text-right space-x-1">
+                                <Button 
+                                  variant="ghost" 
+                                  size="sm" 
+                                  onClick={() => handleOpenEditPosition(pos)} 
+                                  className="text-slate-400 hover:text-sky-400 h-8 w-8 p-0 cursor-pointer"
+                                  title="Edit Position"
+                                >
+                                  <Edit2 className="h-3.5 w-3.5" />
+                                </Button>
                                 <Button 
                                   variant="ghost" 
                                   size="sm" 
                                   onClick={() => handleRemovePosition(pos.id)} 
                                   className="text-slate-400 hover:text-rose-500 h-8 w-8 p-0 cursor-pointer"
+                                  title="Delete Position"
                                 >
-                                  <Trash2 className="h-4 w-4" />
+                                  <Trash2 className="h-3.5 w-3.5" />
                                 </Button>
                               </td>
                             </tr>
@@ -1883,6 +1946,9 @@ export default function Dashboard() {
                     <ul className={`list-disc space-y-1.5 pl-4 ${themeMutedColor}`}>
                       <li>
                         <strong className={themeTextColor}>Active Position Tracking:</strong> Log entry price, purchase date, and share size for open or planned setups directly from the slide-out sheet or stock detail profiles. Fractional shares are fully supported up to 4 decimal places.
+                      </li>
+                      <li>
+                        <strong className={themeTextColor}>Edit & In-Place Reconfiguration:</strong> Click the edit icon (<Edit2 className="h-3 w-3 inline" />) on any position row to adjust entry date, share count, buy price, or target levels without deleting.
                       </li>
                       <li>
                         <strong className={themeTextColor}>Interactive Date Picker & Typing:</strong> Select dates via the calendar popup or type directly in YYYY-MM-DD format.
@@ -2089,13 +2155,17 @@ export default function Dashboard() {
         )}
       </div>
 
-      {/* POCKET TRADER DRAWER */}
+      {/* POCKET TRADER DRAWER (ADD / EDIT POSITION) */}
       <Sheet open={isSheetOpen} onOpenChange={setIsSheetOpen}>
         <SheetContent side="right" className={`w-[360px] sm:w-[440px] p-6 shadow-2xl border-l overflow-y-auto ${isDark ? 'bg-slate-900 text-white border-slate-800' : 'bg-white text-slate-900 border-slate-200'}`}>
           <SheetHeader className={`pb-4 border-b ${isDark ? 'border-slate-800' : 'border-slate-200'}`}>
-            <SheetTitle className={`text-lg font-bold ${themeTextColor}`}>Track New Position</SheetTitle>
+            <SheetTitle className={`text-lg font-bold ${themeTextColor}`}>
+              {editingPositionId ? 'Edit Tracked Position' : 'Track New Position'}
+            </SheetTitle>
             <SheetDescription className={`text-xs ${themeMutedColor}`}>
-              Type or select any TSX or custom symbol. Target achievements, dynamic stop losses, and P&L compute automatically.
+              {editingPositionId 
+                ? 'Update your entry price, shares count, entry date, or target thresholds.' 
+                : 'Type or select any TSX or custom symbol. Target achievements, dynamic stop losses, and P&L compute automatically.'}
             </SheetDescription>
           </SheetHeader>
 
@@ -2108,7 +2178,7 @@ export default function Dashboard() {
             </span>
           </div>
 
-          <form onSubmit={handleAddPosition} className="space-y-4 pt-4">
+          <form onSubmit={handleSavePosition} className="space-y-4 pt-4">
             <div className="space-y-1.5 relative" ref={sheetSearchRef}>
               <Label htmlFor="stockSearch" className={`text-xs font-bold ${themeTextColor}`}>
                 TSX Ticker or Company Name
@@ -2117,6 +2187,7 @@ export default function Dashboard() {
                 <Input
                   id="stockSearch"
                   type="text"
+                  disabled={editingPositionId !== null}
                   placeholder="Type symbol (e.g. AC, BB, SHOP) or name..."
                   value={sheetSearchInput}
                   onChange={(e) => {
@@ -2124,14 +2195,18 @@ export default function Dashboard() {
                     setNewSymbol(e.target.value.trim().toUpperCase())
                     setIsSheetSearchOpen(true)
                   }}
-                  onFocus={() => setIsSheetSearchOpen(true)}
-                  className={`text-xs h-10 pr-8 font-medium ${themeInputBg}`}
+                  onFocus={() => {
+                    if (!editingPositionId) setIsSheetSearchOpen(true)
+                  }}
+                  className={`text-xs h-10 pr-8 font-medium ${themeInputBg} ${editingPositionId ? 'opacity-70 cursor-not-allowed' : ''}`}
                   required
                 />
-                <ChevronDown className="absolute right-2.5 top-3 h-4 w-4 text-slate-400 pointer-events-none" />
+                {!editingPositionId && (
+                  <ChevronDown className="absolute right-2.5 top-3 h-4 w-4 text-slate-400 pointer-events-none" />
+                )}
               </div>
 
-              {isSheetSearchOpen && (
+              {!editingPositionId && isSheetSearchOpen && (
                 <div className={`absolute left-0 right-0 top-18 z-50 border rounded-xl shadow-2xl max-h-56 overflow-y-auto divide-y ${isDark ? 'bg-slate-950 border-slate-700 divide-slate-800' : 'bg-white border-slate-200 divide-slate-100'}`}>
                   {drawerSuggestions.map((item) => (
                     <button
@@ -2227,12 +2302,15 @@ export default function Dashboard() {
 
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label htmlFor="price" className={`text-xs font-bold ${themeTextColor}`}>Buy Price (CAD)</Label>
+                <Label htmlFor="price" className={`text-xs font-bold ${themeTextColor}`}>
+                  Avg Buy Price (CAD)
+                </Label>
                 <Input
                   id="price"
                   type="number"
                   step="any"
                   min="0.01"
+                  placeholder="e.g. 236.89"
                   value={newBuyPrice}
                   onChange={(e) => setNewBuyPrice(e.target.value)}
                   className={`h-10 text-xs font-medium ${themeInputBg}`}
@@ -2264,7 +2342,7 @@ export default function Dashboard() {
                 type="number"
                 step="any"
                 min="0.01"
-                placeholder="e.g. 152.50"
+                placeholder="e.g. 225.00"
                 value={newStopLoss}
                 onChange={(e) => setNewStopLoss(e.target.value)}
                 className={`h-10 text-xs font-medium ${themeInputBg}`}
@@ -2273,7 +2351,9 @@ export default function Dashboard() {
 
             <div className="pt-4">
               <Button type="submit" className="w-full bg-sky-600 hover:bg-sky-500 text-white font-bold shadow-md cursor-pointer h-10">
-                {user ? 'Save to Cloud Portfolio' : 'Save to Pocket Trader'}
+                {editingPositionId 
+                  ? (user ? 'Update Cloud Position' : 'Update Position') 
+                  : (user ? 'Save to Cloud Portfolio' : 'Save to Pocket Trader')}
               </Button>
             </div>
           </form>
