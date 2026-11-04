@@ -22,6 +22,22 @@ import {
   Edit2, HelpCircle, ChevronLeft, Sparkles
 } from 'lucide-react'
 
+// Extended US catalog to provide default descriptions for US megacaps
+const US_CATALOG: Record<string, string> = {
+  AAPL: 'Apple Inc.',
+  MSFT: 'Microsoft Corporation',
+  NVDA: 'NVIDIA Corporation',
+  AMZN: 'Amazon.com Inc.',
+  GOOGL: 'Alphabet Inc.',
+  META: 'Meta Platforms Inc.',
+  TSLA: 'Tesla Inc.',
+  AVGO: 'Broadcom Inc.',
+  COST: 'Costco Wholesale Corporation',
+  JNJ: 'Johnson & Johnson',
+  SPY: 'SPDR S&P 500 ETF Trust',
+  QQQ: 'Invesco QQQ Trust (Nasdaq 100)'
+}
+
 interface PocketPosition {
   id: string
   symbol: string
@@ -35,6 +51,7 @@ interface PocketPosition {
 type SortField = 'symbol' | 'price' | 'rsi_14' | 'sma_50' | 'sma_200' | 'atr_14' | 'stop_level_atr' | 'target_atr'
 type SortOrder = 'asc' | 'desc'
 type ThemeMode = 'dark' | 'light'
+type MarketUniverse = 'ALL' | 'TSX' | 'US'
 
 export function getSignalConfig(rawSignal: string, isDark: boolean) {
   const sig = (rawSignal || '').toUpperCase()
@@ -83,7 +100,7 @@ const TUTORIAL_STEPS = [
     icon: Activity,
     color: 'text-sky-400',
     description:
-      'TrendNorth filters Canadian securities mathematically to eliminate emotional bias. Rather than guessing entries, our engine tracks multi-timeframe moving average alignments and momentum oscillators.',
+      'TrendNorth Analytics filters US & Canadian securities mathematically to eliminate emotional bias. Rather than guessing entries, our engine tracks multi-timeframe moving average alignments and momentum oscillators.',
     bullets: [
       {
         term: 'Oversold Pullback',
@@ -144,11 +161,11 @@ const TUTORIAL_STEPS = [
     icon: Briefcase,
     color: 'text-indigo-400',
     description:
-      'The Pocket Trader tab is a self-directed portfolio simulation and tracking terminal. It calculates real-time unrealized P&L, days held, and target progress against live TSX quotes.',
+      'The Pocket Trader tab is a self-directed portfolio simulation and tracking terminal. It calculates real-time unrealized P&L, days held, and target progress against live market quotes.',
     bullets: [
       {
-        term: 'Fractional Share Tracking',
-        desc: 'Log exact share quantities with 4-decimal precision (e.g., 0.6028 shs) matching brokerage accounts like Wealthsimple.'
+        term: 'Dual Market Tracking',
+        desc: 'Seamlessly track both Canadian (CAD) and US (USD) securities with fractional share precision.'
       },
       {
         term: 'Interactive Date Picker & Inline Editing',
@@ -177,6 +194,9 @@ export default function Dashboard() {
 
   // Active Tab State
   const [activeTab, setActiveTab] = useState('screener')
+
+  // TN-017: Market Universe Filter State
+  const [marketFilter, setMarketFilter] = useState<MarketUniverse>('ALL')
 
   // Watchlist Membership State
   const [removedSymbols, setRemovedSymbols] = useState<string[]>([])
@@ -328,7 +348,7 @@ export default function Dashboard() {
     setPositions(local ? JSON.parse(local) : [])
   }
 
-  // TSX Market Hours
+  // Market Hours (TSX & US Markets run 9:30 AM - 4:00 PM ET)
   const calculateMarketHours = () => {
     const now = new Date()
     const etTimeStr = now.toLocaleString('en-US', { timeZone: 'America/New_York' })
@@ -345,7 +365,7 @@ export default function Dashboard() {
       setMarketStatus({ status: 'CLOSED', detail: 'Weekend / Holiday', timeMsg: 'Opens 9:30 AM ET next trading day' })
     } else if (totalMinutes >= openMin && totalMinutes < closeMin) {
       const remainingMin = closeMin - totalMinutes
-      setMarketStatus({ status: 'OPEN', detail: 'Regular Trading Session', timeMsg: `${Math.floor(remainingMin / 60)}h ${remainingMin % 60}m until Close` })
+      setMarketStatus({ status: 'OPEN', detail: 'Regular Session', timeMsg: `${Math.floor(remainingMin / 60)}h ${remainingMin % 60}m until Close` })
     } else {
       setMarketStatus({ status: 'CLOSED', detail: totalMinutes < openMin ? 'Pre-Market' : 'After Hours', timeMsg: 'Opens 9:30 AM ET' })
     }
@@ -371,7 +391,6 @@ export default function Dashboard() {
       setTheme(savedTheme)
     }
 
-    // Auto-launch walkthrough only for clean first-time visits (not during auth redirects or errors)
     const hasSeenWalkthrough = localStorage.getItem('trendnorth_walkthrough_seen')
     const isAuthRedirect = window.location.hash.includes('access_token') || 
                            window.location.hash.includes('error') || 
@@ -403,7 +422,6 @@ export default function Dashboard() {
       if (session?.user) {
         fetchCloudPositions(session.user.id)
 
-        // Clean up URL parameters (e.g. ?auth_error=true or #access_token) on successful auth
         if (window.location.search || window.location.hash) {
           const cleanUrl = window.location.origin + window.location.pathname
           window.history.replaceState({}, document.title, cleanUrl)
@@ -445,7 +463,6 @@ export default function Dashboard() {
     localStorage.setItem('trendnorth_theme', nextTheme)
   }
 
-  // Walkthrough Dismiss / Complete Handler
   const handleCloseWalkthrough = (completed = false) => {
     if (dontShowAgain || completed) {
       localStorage.setItem('trendnorth_walkthrough_seen', 'true')
@@ -523,9 +540,6 @@ export default function Dashboard() {
 
   const handleSelectPocketStock = (sym: string, companyName?: string) => {
     let rawSym = sym.split('—')[0].split('-')[0].trim().toUpperCase()
-    if (!rawSym.includes('.') && !rawSym.endsWith('.TO')) {
-      rawSym = `${rawSym}.TO`
-    }
     setNewSymbol(rawSym)
     setSheetSearchInput(companyName ? `${rawSym} — ${companyName}` : rawSym)
     setIsSheetSearchOpen(false)
@@ -540,11 +554,10 @@ export default function Dashboard() {
     }
   }
 
-  // Open Drawer in Edit Mode
   const handleOpenEditPosition = (pos: PocketPosition) => {
     setEditingPositionId(pos.id)
     setNewSymbol(pos.symbol)
-    const comp = EXTENDED_TSX_CATALOG[pos.symbol] || ''
+    const comp = EXTENDED_TSX_CATALOG[pos.symbol] || US_CATALOG[pos.symbol] || ''
     setSheetSearchInput(comp ? `${pos.symbol} — ${comp}` : pos.symbol)
     setNewBuyDate(pos.buyDate)
     setNewBuyPrice(String(pos.buyPrice))
@@ -554,7 +567,6 @@ export default function Dashboard() {
     setIsSheetOpen(true)
   }
 
-  // Open Drawer in New Position Mode
   const handleOpenAddPosition = () => {
     setEditingPositionId(null)
     if (stocks.length > 0) {
@@ -571,15 +583,11 @@ export default function Dashboard() {
     setIsSheetOpen(true)
   }
 
-  // Add or Update Position
   const handleSavePosition = async (e: React.FormEvent) => {
     e.preventDefault()
     
     let cleanSym = (newSymbol || sheetSearchInput).split('—')[0].split('-')[0].trim().toUpperCase()
     if (!cleanSym) return
-    if (!cleanSym.includes('.') && !cleanSym.endsWith('.TO')) {
-      cleanSym = `${cleanSym}.TO`
-    }
 
     const fallbackDate = newBuyDate || new Date().toISOString().split('T')[0]
     const parsedShares = parseFloat(newShares)
@@ -686,16 +694,22 @@ export default function Dashboard() {
     }
   }
 
+  const combinedCatalog = useMemo(() => {
+    return { ...EXTENDED_TSX_CATALOG, ...US_CATALOG }
+  }, [])
+
   const allAvailableStocks = useMemo(() => {
     const existing = [...stocks]
     const existingSyms = new Set(existing.map(s => s.symbol))
 
     customSymbols.forEach(cSym => {
       if (!existingSyms.has(cSym)) {
-        const compName = EXTENDED_TSX_CATALOG[cSym] || cSym
+        const compName = combinedCatalog[cSym] || cSym
+        const isCanadian = cSym.endsWith('.TO') || cSym.endsWith('.V')
         existing.push({
           symbol: cSym,
           company: compName,
+          currency: isCanadian ? 'CAD' : 'USD',
           price: 35.00,
           signal: 'KEEP / HOLD',
           rsi_14: 50.0,
@@ -710,7 +724,7 @@ export default function Dashboard() {
       }
     })
     return existing
-  }, [stocks, customSymbols])
+  }, [stocks, customSymbols, combinedCatalog])
 
   const activeMonitoredStocks = useMemo(() => {
     return allAvailableStocks.filter(s => !removedSymbols.includes(s.symbol))
@@ -722,9 +736,15 @@ export default function Dashboard() {
 
   const isDark = theme === 'dark'
 
+  // TN-017: Filter by Signal, Market Universe, Search, RSI, and Trend
   const filteredAndSortedStocks = useMemo(() => {
     return activeMonitoredStocks
       .filter(s => {
+        // Market filter
+        const isUsStock = !s.symbol.includes('.')
+        if (marketFilter === 'TSX' && isUsStock) return false
+        if (marketFilter === 'US' && !isUsStock) return false
+
         const cfg = getSignalConfig(s.signal, isDark)
         const matchesSignal = selectedSignalKeys.includes(cfg.tag)
         const matchesSearch = s.symbol.toLowerCase().includes(searchQuery.toLowerCase()) || 
@@ -751,25 +771,26 @@ export default function Dashboard() {
           ? String(valA).localeCompare(String(valB)) 
           : String(valB).localeCompare(String(valA))
       })
-  }, [activeMonitoredStocks, selectedSignalKeys, searchQuery, rsiRange, trendFilter, sortField, sortOrder, isDark])
+  }, [activeMonitoredStocks, selectedSignalKeys, searchQuery, rsiRange, trendFilter, marketFilter, sortField, sortOrder, isDark])
 
   const autocompleteSuggestions = useMemo(() => {
     const query = marketSearchInput.trim().toUpperCase()
+    const catalogEntries = Object.entries(combinedCatalog)
     if (!query) {
-      return Object.entries(EXTENDED_TSX_CATALOG).slice(0, 15).map(([sym, name]) => ({
+      return catalogEntries.slice(0, 15).map(([sym, name]) => ({
         symbol: sym,
         company: name
       }))
     }
-    return Object.entries(EXTENDED_TSX_CATALOG)
+    return catalogEntries
       .filter(([sym, name]) => sym.toUpperCase().includes(query) || name.toUpperCase().includes(query))
       .slice(0, 15)
       .map(([sym, name]) => ({ symbol: sym, company: name }))
-  }, [marketSearchInput])
+  }, [marketSearchInput, combinedCatalog])
 
   const drawerSuggestions = useMemo(() => {
     const query = sheetSearchInput.trim().toUpperCase()
-    const catalogEntries = Object.entries(EXTENDED_TSX_CATALOG)
+    const catalogEntries = Object.entries(combinedCatalog)
     if (!query) {
       return catalogEntries.slice(0, 15).map(([sym, name]) => ({ symbol: sym, company: name }))
     }
@@ -778,20 +799,21 @@ export default function Dashboard() {
       .slice(0, 15)
       .map(([sym, name]) => ({ symbol: sym, company: name }))
 
-    const cleanQuery = query.includes('.') ? query : `${query}.TO`
-    const exists = catalogEntries.some(([sym]) => sym.toUpperCase() === cleanQuery)
+    const exists = catalogEntries.some(([sym]) => sym.toUpperCase() === query)
     if (!exists && query.length > 0) {
-      filtered.unshift({ symbol: cleanQuery, company: 'Add Custom Ticker' })
+      filtered.unshift({ symbol: query, company: 'Add Custom Ticker' })
     }
     return filtered
-  }, [sheetSearchInput])
+  }, [sheetSearchInput, combinedCatalog])
 
   const calculatedPositions = useMemo(() => {
     return positions.map(pos => {
       const stockMatch = allAvailableStocks.find(s => s.symbol === pos.symbol)
       const currentPrice = stockMatch ? Number(stockMatch.price) : pos.buyPrice
       const signal = stockMatch ? stockMatch.signal : 'DATA PENDING'
-      const company = stockMatch ? stockMatch.company : (EXTENDED_TSX_CATALOG[pos.symbol] || '—')
+      const company = stockMatch ? stockMatch.company : (combinedCatalog[pos.symbol] || '—')
+      const isUs = !pos.symbol.includes('.')
+      const currency = isUs ? 'USD' : 'CAD'
       
       const targetPrice = pos.buyPrice + pos.targetGain
       const totalCost = pos.buyPrice * pos.shares
@@ -810,12 +832,12 @@ export default function Dashboard() {
       const isStopBreached = pos.stopLoss ? currentPrice <= pos.stopLoss : false
 
       return {
-        ...pos, company, currentPrice, signal, targetPrice,
+        ...pos, company, currency, currentPrice, signal, targetPrice,
         totalCost, currentValue, dollarPnl, pctPnl, daysHeld,
         isTargetReached, targetProgress, isStopBreached
       }
     })
-  }, [positions, allAvailableStocks, clientToday])
+  }, [positions, allAvailableStocks, clientToday, combinedCatalog])
 
   const portfolioTotals = useMemo(() => {
     const totalInvested = calculatedPositions.reduce((acc, p) => acc + p.totalCost, 0)
@@ -850,22 +872,24 @@ export default function Dashboard() {
     const matched = allAvailableStocks.find(s => s.symbol === activeStockDetail)
     if (matched) return matched
 
-    const comp = EXTENDED_TSX_CATALOG[activeStockDetail] || activeStockDetail
+    const comp = combinedCatalog[activeStockDetail] || activeStockDetail
+    const isUs = !activeStockDetail.includes('.')
     return {
       symbol: activeStockDetail,
       company: comp,
+      currency: isUs ? 'USD' : 'CAD',
       price: 35.00,
       signal: 'KEEP / HOLD',
       rsi_14: 50.0,
       sma_50: 34.50,
       sma_200: 33.00,
       sma_trend: 'Active',
-      rationale: 'Active TSX Equity Profile',
+      rationale: `${isUs ? 'US' : 'TSX'} Equity Profile`,
       atr_14: 1.05,
       stop_level_atr: 32.90,
       target_atr: 38.15
     } as ScreenerRecord
-  }, [activeStockDetail, allAvailableStocks])
+  }, [activeStockDetail, allAvailableStocks, combinedCatalog])
 
   const selectedStockObj = useMemo(() => {
     return allAvailableStocks.find(s => s.symbol === newSymbol) || null
@@ -885,6 +909,7 @@ export default function Dashboard() {
   // VIEW 1: FULL-PAGE MARKET DATA DETAILS VIEW
   if (selectedDetailStock) {
     const s = selectedDetailStock
+    const isUs = !s.symbol.includes('.')
     const cleanSym = s.symbol.replace('.TO', '')
     const priceDiff = s.signal?.includes('BUY') ? 0.85 : s.signal?.includes('SELL') ? -1.45 : 0.20
     const pctDiff = ((priceDiff / s.price) * 100)
@@ -893,6 +918,8 @@ export default function Dashboard() {
     const tvTheme = isDark ? 'dark' : 'light'
     const tvToolbarBg = isDark ? '0f172a' : 'ffffff'
     const sigCfg = getSignalConfig(s.signal, isDark)
+    const stockCurrency = (s as any).currency || (isUs ? 'USD' : 'CAD')
+    const tvSymbol = isUs ? `NASDAQ%3A${s.symbol}` : `TSX%3A${cleanSym}`
 
     return (
       <div className={`min-h-screen ${themeBg} font-sans flex flex-col justify-between transition-colors`}>
@@ -939,6 +966,9 @@ export default function Dashboard() {
                   <Badge className={`${sigCfg.badgeClass} text-xs px-2.5 py-0.5`}>
                     {sigCfg.label}
                   </Badge>
+                  <span className={`text-xs font-bold px-2 py-0.5 rounded border ${isUs ? 'bg-sky-950/80 text-sky-300 border-sky-600' : 'bg-amber-950/80 text-amber-300 border-amber-600'}`}>
+                    {stockCurrency}
+                  </span>
                 </div>
                 <p className={`text-base font-semibold ${themeMutedColor} mt-1`}>{s.company}</p>
               </div>
@@ -946,7 +976,7 @@ export default function Dashboard() {
               <div className="flex flex-wrap items-center gap-4">
                 <div className="text-left md:text-right">
                   <div className={`text-3xl font-black ${themeTextColor}`}>
-                    ${Number(s.price).toFixed(2)} <span className={`text-sm font-semibold ${themeMutedColor}`}>CAD</span>
+                    ${Number(s.price).toFixed(2)} <span className={`text-sm font-semibold ${themeMutedColor}`}>{stockCurrency}</span>
                   </div>
                   <div className={`text-sm font-bold mt-0.5 ${isPositive ? 'text-emerald-500' : 'text-rose-500'}`}>
                     {isPositive ? '+' : ''}${priceDiff.toFixed(2)} ({isPositive ? '+' : ''}{pctDiff.toFixed(2)}%) at close
@@ -982,7 +1012,7 @@ export default function Dashboard() {
               <div className="h-[460px] w-full">
                 <iframe
                   title={`${s.symbol} TradingView Financial Chart`}
-                  src={`https://s.tradingview.com/widgetembed/?frameElementId=tradingview_widget&symbol=TSX%3A${cleanSym}&interval=D&hidesidetoolbar=0&symboledit=0&saveimage=0&toolbarbg=${tvToolbarBg}&studies=[]&theme=${tvTheme}&style=3&timezone=America%2FNew_York&withdateranges=1&hideideas=1&locale=en`}
+                  src={`https://s.tradingview.com/widgetembed/?frameElementId=tradingview_widget&symbol=${tvSymbol}&interval=D&hidesidetoolbar=0&symboledit=0&saveimage=0&toolbarbg=${tvToolbarBg}&studies=[]&theme=${tvTheme}&style=3&timezone=America%2FNew_York&withdateranges=1&hideideas=1&locale=en`}
                   className="w-full h-full border-0"
                 />
               </div>
@@ -1000,7 +1030,7 @@ export default function Dashboard() {
                   { label: 'Stop (2x ATR)', val: s.stop_level_atr ? `$${Number(s.stop_level_atr).toFixed(2)}` : '—' },
                   { label: 'Target (3x ATR)', val: s.target_atr ? `$${Number(s.target_atr).toFixed(2)}` : '—' },
                   { label: '52-W High', val: `$${(s.price * 1.22).toFixed(2)}` },
-                  { label: 'Exchange', val: 'TSX (Toronto)' },
+                  { label: 'Exchange', val: isUs ? 'US (NYSE/NASDAQ)' : 'TSX (Toronto)' },
                 ].map(stat => (
                   <div key={stat.label} className={`p-3.5 rounded-xl border ${themeBorder} ${isDark ? 'bg-slate-900/90' : 'bg-white shadow-2xs'}`}>
                     <p className={`text-[11px] font-bold uppercase tracking-wider ${themeMutedColor}`}>{stat.label}</p>
@@ -1065,15 +1095,15 @@ export default function Dashboard() {
             <div className={`p-6 rounded-2xl border ${themeBorder} ${isDark ? 'bg-slate-900/90' : 'bg-white shadow-xs'} space-y-4`}>
               <h3 className={`text-xs font-bold uppercase tracking-wider ${themeTextColor}`}>About {s.symbol}</h3>
               <p className={`text-xs ${themeMutedColor} leading-relaxed font-normal`}>
-                {s.company} is listed on the Toronto Stock Exchange. The security is actively evaluated within TrendNorth&apos;s quantitative momentum matrix for educational and technical research.
+                {s.company} is listed on {isUs ? 'US Markets' : 'the Toronto Stock Exchange'}. The security is actively evaluated within TrendNorth Analytics&apos; quantitative momentum matrix for educational and technical research.
               </p>
               
               <div className={`flex flex-wrap gap-2 pt-3 border-t ${isDark ? 'border-slate-800' : 'border-slate-100'} text-xs`}>
                 <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full border ${themeBorder} ${isDark ? 'bg-slate-800' : 'bg-slate-100'} ${themeTextColor} font-medium`}>
-                  <Building2 className="h-3.5 w-3.5 text-sky-500" /> TSX Equities
+                  <Building2 className="h-3.5 w-3.5 text-sky-500" /> {isUs ? 'US Equities' : 'TSX Equities'}
                 </span>
                 <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full border ${themeBorder} ${isDark ? 'bg-slate-800' : 'bg-slate-100'} ${themeTextColor} font-medium`}>
-                  <Globe className="h-3.5 w-3.5 text-sky-500" /> Canada
+                  <Globe className="h-3.5 w-3.5 text-sky-500" /> {isUs ? 'United States' : 'Canada'}
                 </span>
                 <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full border ${themeBorder} ${isDark ? 'bg-slate-800' : 'bg-slate-100'} ${themeTextColor} font-medium`}>
                   <Users className="h-3.5 w-3.5 text-sky-500" /> Capital Markets
@@ -1118,25 +1148,25 @@ export default function Dashboard() {
                   </span>
                 </div>
                 <p className="leading-relaxed text-[11px]">
-                  TrendNorth is an algorithmic market research and technical screening tool designed exclusively for educational purposes[cite: 1, 2]. <strong>TrendNorth is not registered as an investment adviser, portfolio manager, or broker-dealer</strong> with the Ontario Securities Commission (OSC), the Canadian Investment Regulatory Organization (CIRO), the U.S. SEC, or any other financial regulatory agency[cite: 1, 2].
+                  TrendNorth Analytics is an algorithmic market research and technical screening tool designed exclusively for educational purposes. <strong>TrendNorth Analytics is not registered as an investment adviser, portfolio manager, or broker-dealer</strong> with the Ontario Securities Commission (OSC), CIRO, the U.S. Securities and Exchange Commission (SEC), or FINRA.
                 </p>
                 <p className="leading-relaxed text-[11px]">
-                  Technical conditions and volatility-based thresholds represent programmatic calculations derived from mathematical models applied to delayed market data[cite: 1, 2]. <strong>These mathematical outputs do not constitute investment advice, financial planning, or a recommendation to purchase or sell any security[cite: 1, 2].</strong>
+                  Technical conditions and volatility-based thresholds represent programmatic calculations derived from mathematical models applied to delayed market data. <strong>These mathematical outputs do not constitute investment advice, financial planning, or a recommendation to purchase or sell any security.</strong>
                 </p>
               </div>
 
               <div className="max-w-md space-y-2 text-[11px]">
                 <p className="leading-relaxed">
-                  <strong>Risk of Capital Loss:</strong> Trading Canadian equities involves substantial financial risk, including the loss of principal[cite: 1, 2]. Past technical patterns, historical moving average alignments, and mathematical indicators provide no guarantee of future price performance[cite: 1, 2].
+                  <strong>Risk of Capital Loss:</strong> Trading North American equities involves substantial financial risk, including the loss of principal. Past technical patterns, historical moving average alignments, and mathematical indicators provide no guarantee of future price performance.
                 </p>
                 <p className="text-slate-500 dark:text-slate-400">
-                  Market prices are delayed and retrieved via public endpoints on an "as-is" basis[cite: 2]. Always consult an independent, licensed financial advisor before making investment decisions[cite: 1, 2].
+                  Market prices are delayed and retrieved via public endpoints on an "as-is" basis. Always consult an independent, licensed financial advisor before making investment decisions.
                 </p>
               </div>
             </div>
 
             <div className="pt-4 border-t border-slate-200/60 dark:border-slate-800/60 flex flex-col sm:flex-row items-center justify-between gap-2 text-[11px]">
-              <span>TrendNorth Terminal © {clientYear || '2026'} — TSX Quantitative Intelligence</span>
+              <span>TrendNorth Analytics © {clientYear || '2026'} — US & TSX Quantitative Intelligence</span>
               <span>Self-Directed Research Architecture</span>
             </div>
           </div>
@@ -1251,7 +1281,7 @@ export default function Dashboard() {
           <div className="w-full flex flex-wrap items-center justify-between gap-4 text-xs font-medium">
             <div className="flex items-center gap-6">
               <div className="flex items-center gap-2">
-                <span className={`${themeMutedColor} uppercase tracking-wider text-[11px] font-bold`}>TSX Status</span>
+                <span className={`${themeMutedColor} uppercase tracking-wider text-[11px] font-bold`}>Markets Status</span>
                 <div className="flex items-center gap-1.5 font-bold">
                   <span className={`h-2.5 w-2.5 rounded-full ${marketStatus.status === 'OPEN' ? 'bg-emerald-400 animate-ping' : 'bg-rose-500'}`} />
                   <span className={marketStatus.status === 'OPEN' ? 'text-emerald-500' : 'text-rose-500'}>{marketStatus.status}</span>
@@ -1412,7 +1442,7 @@ export default function Dashboard() {
                     <p className={`text-xs font-bold uppercase tracking-wider ${themeMutedColor}`}>Monitored Universe</p>
                     <p className={`text-3xl font-black mt-1 ${themeTextColor}`}>{activeMonitoredStocks.length}</p>
                     <p className={`text-xs font-semibold mt-1 ${themeMutedColor}`}>
-                      {customSymbols.length > 0 ? `+${customSymbols.length} custom tracked` : 'Active TSX Monitored'}
+                      {customSymbols.length > 0 ? `+${customSymbols.length} custom tracked` : 'Active US & TSX'}
                     </p>
                   </CardContent>
                 </Card>
@@ -1450,12 +1480,38 @@ export default function Dashboard() {
 
               {/* SEARCH & FILTERS BAR */}
               <div className={`p-4 rounded-2xl border shadow-xs space-y-3 ${themeCardBg}`}>
+                
+                {/* TN-017: MARKET UNIVERSE FILTER PILLS */}
+                <div className="flex flex-wrap items-center gap-2 pb-1 border-b border-slate-200 dark:border-slate-800">
+                  <span className={`text-xs font-extrabold uppercase tracking-wider mr-1 ${themeMutedColor}`}>Universe:</span>
+                  {[
+                    { id: 'ALL', label: 'All Markets' },
+                    { id: 'TSX', label: '🇨🇦 TSX Equities (CAD)' },
+                    { id: 'US', label: '🇺🇸 US Equities (USD)' },
+                  ].map((m) => (
+                    <button
+                      key={m.id}
+                      type="button"
+                      onClick={() => setMarketFilter(m.id as MarketUniverse)}
+                      className={`text-xs font-bold px-3 py-1.5 rounded-xl border transition-all cursor-pointer ${
+                        marketFilter === m.id
+                          ? 'bg-sky-600 text-white border-sky-500 shadow-sm'
+                          : isDark
+                            ? 'bg-slate-900 text-slate-400 border-slate-700 hover:text-white'
+                            : 'bg-white text-slate-600 border-slate-200 hover:text-slate-900'
+                      }`}
+                    >
+                      {m.label}
+                    </button>
+                  ))}
+                </div>
+
                 <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3">
                   <div className="relative flex-1">
                     <Search className="absolute left-3.5 top-2.5 h-4 w-4 text-slate-400" />
                     <input
                       type="text"
-                      placeholder="Search TSX ticker or company name in watchlist (e.g., SHOP, RY, TD, AC)..."
+                      placeholder="Search US or TSX ticker or company name (e.g., AAPL, NVDA, SHOP, RY)..."
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
                       className={`w-full pl-10 pr-4 py-2 rounded-xl text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-sky-500 font-medium border ${themeInputBg}`}
@@ -1558,6 +1614,7 @@ export default function Dashboard() {
                           setSelectedSignalKeys(['PULLBACK', 'BREAKDOWN', 'OVERBOUGHT', 'NEUTRAL'])
                           setRsiRange([0, 100])
                           setTrendFilter('ALL')
+                          setMarketFilter('ALL')
                           setSearchQuery('')
                         }}
                         className={`text-xs font-bold gap-1 cursor-pointer ${isDark ? 'text-slate-300 hover:text-white' : 'text-slate-600 hover:text-slate-900'}`}
@@ -1582,7 +1639,7 @@ export default function Dashboard() {
                         </th>
                         <th className="px-4 py-3.5 cursor-pointer hover:text-sky-500" onClick={() => handleSort('price')}>
                           <div className="flex items-center gap-1.5">
-                            Price (CAD) <ArrowUpDown className="h-3.5 w-3.5 text-slate-400" />
+                            Price <ArrowUpDown className="h-3.5 w-3.5 text-slate-400" />
                           </div>
                         </th>
                         <th className="px-4 py-3.5">
@@ -1625,6 +1682,9 @@ export default function Dashboard() {
                         filteredAndSortedStocks.map((stock) => {
                           const heldShares = holdingsMap.get(stock.symbol)
                           const sigCfg = getSignalConfig(stock.signal, isDark)
+                          const isUs = !stock.symbol.includes('.')
+                          const rowCurrency = (stock as any).currency || (isUs ? 'USD' : 'CAD')
+
                           return (
                             <tr 
                               key={stock.symbol} 
@@ -1637,6 +1697,15 @@ export default function Dashboard() {
                                     className={`group-hover:text-sky-500 transition-colors text-base font-extrabold cursor-pointer ${themeTextColor}`}
                                   >
                                     {stock.symbol}
+                                  </span>
+
+                                  {/* Inline Currency Pill */}
+                                  <span className={`text-[10px] font-bold px-1.5 py-0.2 rounded border ${
+                                    isUs 
+                                      ? 'bg-sky-950/60 text-sky-400 border-sky-700/60' 
+                                      : 'bg-amber-950/60 text-amber-400 border-amber-700/60'
+                                  }`}>
+                                    {rowCurrency}
                                   </span>
 
                                   {heldShares !== undefined && (
@@ -1725,7 +1794,7 @@ export default function Dashboard() {
               <div className={`flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-4 rounded-2xl border shadow-xs ${themeCardBg}`}>
                 <div>
                   <h2 className={`text-base font-bold ${themeTextColor}`}>Pocket Trader Portfolio Tracker</h2>
-                  <p className={`text-xs ${themeMutedColor}`}>Self-directed paper trading calculations and target monitoring against TSX scans.</p>
+                  <p className={`text-xs ${themeMutedColor}`}>Self-directed paper trading calculations and target monitoring against live scans.</p>
                 </div>
 
                 <div className="flex items-center gap-2">
@@ -1748,7 +1817,7 @@ export default function Dashboard() {
                 <div className="flex items-start gap-2">
                   <Info className="h-4 w-4 text-sky-500 shrink-0 mt-0.5" />
                   <div>
-                    <strong className={themeTextColor}>Self-Directed Simulated Ledger:</strong> Pocket Trader calculates targets and profit/loss dynamically from TSX quotes. Fractional positions are calculated with full decimal precision.
+                    <strong className={themeTextColor}>Self-Directed Simulated Ledger:</strong> Pocket Trader calculates targets and profit/loss dynamically from market quotes. Fractional positions are calculated with full decimal precision.
                   </div>
                 </div>
                 {user ? (
@@ -1824,7 +1893,12 @@ export default function Dashboard() {
                           return (
                             <tr key={pos.id} className={`${themeTableRowHover} transition-colors`}>
                               <td className="px-5 py-3.5 font-bold cursor-pointer" onClick={() => setActiveStockDetail(pos.symbol)}>
-                                <span className="text-sky-500 hover:underline text-base font-extrabold">{pos.symbol}</span>
+                                <div className="flex items-center gap-1.5">
+                                  <span className="text-sky-500 hover:underline text-base font-extrabold">{pos.symbol}</span>
+                                  <span className="text-[10px] font-bold px-1.5 py-0 rounded border border-slate-700 bg-slate-800 text-slate-300">
+                                    {pos.currency}
+                                  </span>
+                                </div>
                                 <div className={`text-xs font-medium ${themeMutedColor}`}>
                                   {pos.company} ({Number(pos.shares).toLocaleString(undefined, { maximumFractionDigits: 4 })} shs)
                                 </div>
@@ -1910,7 +1984,7 @@ export default function Dashboard() {
               <div className={`p-6 rounded-2xl border shadow-xl ${themeCardBg}`}>
                 <div className="flex items-center gap-2 mb-4">
                   <BarChart3 className="h-5 w-5 text-sky-500" />
-                  <h3 className={`font-bold text-base ${themeTextColor}`}>TSX Momentum, Moving Average & Volatility Spreads</h3>
+                  <h3 className={`font-bold text-base ${themeTextColor}`}>Momentum, Moving Average & Volatility Spreads</h3>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                   <div className={`p-5 rounded-xl border ${isDark ? 'bg-slate-800/80 border-emerald-600/80' : 'bg-emerald-50 border-emerald-200'}`}>
@@ -1954,10 +2028,10 @@ export default function Dashboard() {
                   </div>
                   <div>
                     <h2 className={`text-xl font-bold tracking-tight ${themeTextColor}`}>
-                      TrendNorth Operational & Technical Manual
+                      TrendNorth Analytics Operational & Technical Manual
                     </h2>
                     <p className={`text-xs ${themeMutedColor} mt-0.5`}>
-                      Quantitative models, indicator conditions, ATR volatility engine, cloud scheduling, and self-directed tracking procedures.
+                      Quantitative models, indicator conditions, ATR volatility engine, cross-border multi-currency scheduling, and self-directed tracking procedures.
                     </p>
                   </div>
                 </div>
@@ -1968,7 +2042,7 @@ export default function Dashboard() {
                     Platform Scope & Core Universe
                   </h3>
                   <p className={`text-xs sm:text-sm leading-relaxed font-normal pl-8 ${themeMutedColor}`}>
-                    TrendNorth is an automated quantitative screening terminal monitoring high-liquidity Canadian equities and benchmark ETFs listed on the Toronto Stock Exchange (TSX). The engine continuously evaluates momentum and multi-timeframe moving average spreads to identify statistical inflection points while removing subjective emotional bias.
+                    TrendNorth Analytics is an automated quantitative screening terminal monitoring high-liquidity North American equities (TSX & US Megacaps) and benchmark index ETFs. The engine continuously evaluates momentum and multi-timeframe moving average spreads to identify statistical inflection points while removing subjective emotional bias.
                   </p>
                 </div>
 
@@ -2065,7 +2139,7 @@ export default function Dashboard() {
                   </h3>
                   <div className="pl-8 space-y-2 text-xs sm:text-sm">
                     <p className={`leading-relaxed ${themeMutedColor}`}>
-                      To avoid arbitrary dollar guesses, TrendNorth utilizes Welles Wilder&apos;s 14-day <strong>Average True Range (ATR)</strong> to dynamically assess the expected daily price volatility of each Canadian security:
+                      To avoid arbitrary dollar guesses, TrendNorth utilizes Welles Wilder&apos;s 14-day <strong>Average True Range (ATR)</strong> to dynamically assess the expected daily price volatility of each security:
                     </p>
                     <ul className={`list-disc space-y-2 pl-4 ${themeMutedColor}`}>
                       <li>
@@ -2086,7 +2160,7 @@ export default function Dashboard() {
                   <div className="pl-8 space-y-2 text-xs sm:text-sm">
                     <ul className={`list-disc space-y-1.5 pl-4 ${themeMutedColor}`}>
                       <li>
-                        <strong className={themeTextColor}>Active Position Tracking:</strong> Log entry price, purchase date, and share size for open or planned setups directly from the slide-out sheet or stock detail profiles. Fractional shares are fully supported up to 4 decimal places.
+                        <strong className={themeTextColor}>Cross-Border Tracking:</strong> Track both US (USD) and Canadian (CAD) positions simultaneously with exact 4-decimal fractional precision.
                       </li>
                       <li>
                         <strong className={themeTextColor}>Edit & In-Place Reconfiguration:</strong> Click the edit icon (<Edit2 className="h-3 w-3 inline" />) on any position row to adjust entry date, share count, buy price, or target levels without deleting.
@@ -2114,7 +2188,7 @@ export default function Dashboard() {
                       <p className={`font-bold text-sm ${themeTextColor}`}>🌅 Morning Market Dip Scan</p>
                       <p className="text-sky-500 font-mono font-bold">10:32 AM ET (Mon–Fri)</p>
                       <p className={`pt-1 leading-relaxed ${themeMutedColor}`}>
-                        Executes 62 minutes after market open once opening auction noise clears to capture high-volume morning oversold pullbacks.
+                        Executes 62 minutes after market open once opening auction noise clears to capture high-volume morning oversold pullbacks across US and Canadian equities.
                       </p>
                     </div>
 
@@ -2122,14 +2196,14 @@ export default function Dashboard() {
                       <p className={`font-bold text-sm ${themeTextColor}`}>🌙 Post-Close Official Bar Scan</p>
                       <p className="text-sky-500 font-mono font-bold">04:47 PM ET (Mon–Fri)</p>
                       <p className={`pt-1 leading-relaxed ${themeMutedColor}`}>
-                        Executes 47 minutes post-closing bell after TSX Market-on-Close (MOC) prints finalize daily closing candles and settlement values.
+                        Executes 47 minutes post-closing bell after Market-on-Close (MOC) prints finalize daily closing candles and settlement values.
                       </p>
                     </div>
                   </div>
                 </div>
 
                 <div className={`p-4 rounded-xl border text-[11px] leading-relaxed ${isDark ? 'bg-slate-950/80 border-slate-800 text-slate-400' : 'bg-slate-100 border-slate-200 text-slate-600'}`}>
-                  <strong>Notice:</strong> TrendNorth Analytics provides mathematical screening models and technical momentum research for self-directed investors[cite: 1, 2]. All signals, metrics, and indicators are generated programmatically for educational analysis and do not constitute personalized financial, tax, or investment advice[cite: 1, 2].
+                  <strong>Notice:</strong> TrendNorth Analytics provides mathematical screening models and technical momentum research for self-directed investors. All signals, metrics, and indicators are generated programmatically for educational analysis and do not constitute personalized financial, tax, or investment advice.
                 </div>
               </div>
             </TabsContent>
@@ -2152,25 +2226,25 @@ export default function Dashboard() {
               <p className="leading-relaxed text-[11px]">
                 TrendNorth Analytics is an algorithmic market research and technical screening tool designed exclusively for educational purposes. 
                 <strong>TrendNorth Analytics is not registered as an investment adviser, portfolio manager, or broker-dealer</strong> with the Ontario Securities Commission (OSC), CIRO, the U.S. Securities and Exchange Commission (SEC), or FINRA. 
-                  Technical metrics and ATR-based thresholds do not constitute investment advice or order executions.
+                Technical metrics and ATR-based thresholds do not constitute investment advice or order executions.
               </p>
               <p className="leading-relaxed text-[11px]">
-                Technical conditions and volatility-based thresholds represent programmatic calculations derived from mathematical models applied to delayed market data[cite: 1, 2]. <strong>These mathematical outputs do not constitute investment advice, financial planning, or a recommendation to purchase or sell any security[cite: 1, 2].</strong>
+                Technical conditions and volatility-based thresholds represent programmatic calculations derived from mathematical models applied to delayed market data. <strong>These mathematical outputs do not constitute investment advice, financial planning, or a recommendation to purchase or sell any security.</strong>
               </p>
             </div>
 
             <div className="max-w-md space-y-2 text-[11px]">
               <p className="leading-relaxed">
-                <strong>Risk of Capital Loss:</strong> Trading Canadian equities involves substantial financial risk, including the loss of principal[cite: 1, 2]. Past technical patterns, historical moving average alignments, and mathematical indicators provide no guarantee of future price performance[cite: 1, 2].
+                <strong>Risk of Capital Loss:</strong> Trading North American equities involves substantial financial risk, including the loss of principal. Past technical patterns, historical moving average alignments, and mathematical indicators provide no guarantee of future price performance.
               </p>
               <p className="text-slate-500 dark:text-slate-400">
-                Market prices are delayed and retrieved via public endpoints on an "as-is" basis[cite: 2]. Always consult an independent, licensed financial advisor before making investment decisions[cite: 1, 2].
+                Market prices are delayed and retrieved via public endpoints on an "as-is" basis. Always consult an independent, licensed financial advisor before making investment decisions.
               </p>
             </div>
           </div>
 
           <div className="pt-4 border-t border-slate-200/60 dark:border-slate-800/60 flex flex-col sm:flex-row items-center justify-between gap-2 text-[11px]">
-            <span>TrendNorth Terminal © {clientYear || '2026'} — TSX Quantitative Intelligence</span>
+            <span>TrendNorth Analytics © {clientYear || '2026'} — US & TSX Quantitative Intelligence</span>
             <span>Self-Directed Research Architecture</span>
           </div>
         </div>
@@ -2308,7 +2382,7 @@ export default function Dashboard() {
             <SheetDescription className={`text-xs ${themeMutedColor}`}>
               {editingPositionId 
                 ? 'Update your entry price, shares count, entry date, or target thresholds.' 
-                : 'Type or select any TSX or custom symbol. Target achievements, dynamic stop losses, and P&L compute automatically.'}
+                : 'Type or select any TSX, US, or custom symbol. Target achievements, dynamic stop losses, and P&L compute automatically.'}
             </SheetDescription>
           </SheetHeader>
 
@@ -2316,7 +2390,7 @@ export default function Dashboard() {
             <Info className="h-3.5 w-3.5 text-sky-500 shrink-0 mt-0.5" />
             <span>
               {user 
-                ? 'Positions are synchronized directly with your cloud profile across devices.'
+                ? 'Positions are synchronized directly with your cloud profile across devices.' 
                 : 'Guest mode: Entries are stored only in this browser. Sign in above to sync across devices.'}
             </span>
           </div>
@@ -2324,14 +2398,14 @@ export default function Dashboard() {
           <form onSubmit={handleSavePosition} className="space-y-4 pt-4">
             <div className="space-y-1.5 relative" ref={sheetSearchRef}>
               <Label htmlFor="stockSearch" className={`text-xs font-bold ${themeTextColor}`}>
-                TSX Ticker or Company Name
+                Security Ticker or Company Name
               </Label>
               <div className="relative">
                 <Input
                   id="stockSearch"
                   type="text"
                   disabled={editingPositionId !== null}
-                  placeholder="Type symbol (e.g. AC, BB, SHOP) or name..."
+                  placeholder="Type symbol (e.g. AAPL, NVDA, SHOP.TO) or name..."
                   value={sheetSearchInput}
                   onChange={(e) => {
                     setSheetSearchInput(e.target.value)
@@ -2446,7 +2520,7 @@ export default function Dashboard() {
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label htmlFor="price" className={`text-xs font-bold ${themeTextColor}`}>
-                  Avg Buy Price (CAD)
+                  Avg Buy Price ({selectedStockObj?.symbol?.includes('.') ? 'CAD' : 'USD'})
                 </Label>
                 <Input
                   id="price"
@@ -2478,7 +2552,7 @@ export default function Dashboard() {
             {/* TN-005 Stop Loss Input */}
             <div className="space-y-1.5">
               <Label htmlFor="stopLoss" className={`text-xs font-bold ${themeTextColor}`}>
-                Technical Stop-Loss Level (CAD) <span className="text-[10px] text-slate-400 font-normal">(Optional)</span>
+                Technical Stop-Loss Level <span className="text-[10px] text-slate-400 font-normal">(Optional)</span>
               </Label>
               <Input
                 id="stopLoss"
@@ -2559,7 +2633,7 @@ export default function Dashboard() {
               <div className="p-2.5 rounded-lg border border-amber-500/20 bg-amber-500/5 text-[11px] text-amber-500/90 leading-tight flex items-start gap-1.5">
                 <ShieldAlert className="h-3.5 w-3.5 shrink-0 mt-0.5" />
                 <span>
-                  <strong>Educational Scope:</strong> Models represent mathematical formulas on delayed market data and do not constitute financial advice or transaction orders[cite: 1, 2].
+                  <strong>Educational Scope:</strong> Models represent mathematical formulas on delayed market data and do not constitute financial advice or transaction orders.
                 </span>
               </div>
             </div>

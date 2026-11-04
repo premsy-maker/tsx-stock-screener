@@ -19,7 +19,8 @@ try:
 except ImportError:
     create_client = None
 
-WATCHLIST = {
+# --- CANADIAN TSX WATCHLIST (CAD) ---
+TSX_WATCHLIST = {
     # --- Index / All-in-One ETFs ---
     "XEQT.TO": "iShares Core Equity ETF Portfolio",
     "XIU.TO": "iShares S&P/TSX 60 Index ETF",
@@ -98,6 +99,27 @@ WATCHLIST = {
     "K.TO": "Kinross Gold",
 }
 
+# --- TN-017: US EQUITIES WATCHLIST (USD) ---
+US_WATCHLIST = {
+    # --- Index Benchmark ETFs ---
+    "SPY": "SPDR S&P 500 ETF Trust",
+    "QQQ": "Invesco QQQ Trust (Nasdaq 100)",
+
+    # --- Mega-Cap Technology & Growth ---
+    "AAPL": "Apple Inc.",
+    "MSFT": "Microsoft Corporation",
+    "NVDA": "NVIDIA Corporation",
+    "AMZN": "Amazon.com Inc.",
+    "GOOGL": "Alphabet Inc. (Class A)",
+    "META": "Meta Platforms Inc.",
+    "TSLA": "Tesla Inc.",
+    "AVGO": "Broadcom Inc.",
+
+    # --- Defensive & Consumer Megacaps ---
+    "COST": "Costco Wholesale Corporation",
+    "JNJ": "Johnson & Johnson",
+}
+
 def calculate_rsi(series: pd.Series, period: int = 14) -> pd.Series:
     delta = series.diff()
     gain = (delta.where(delta > 0, 0.0)).rolling(window=period).mean()
@@ -151,6 +173,11 @@ def analyze_symbol(symbol: str, company_name: str):
     current_50 = float(sma_50.iloc[-1])
     current_200 = float(sma_200.iloc[-1])
 
+    # Determine currency and exchange region
+    is_canadian = symbol.endswith(".TO") or symbol.endswith(".V") or symbol.endswith(".CN")
+    currency = "CAD" if is_canadian else "USD"
+    market = "TSX" if is_canadian else "US"
+
     # Determine SMA trend
     sma_trend = "Bullish (50 > 200)" if current_50 >= current_200 else "Bearish (50 < 200)"
 
@@ -184,6 +211,8 @@ def analyze_symbol(symbol: str, company_name: str):
     return {
         "Symbol": symbol,
         "Company": company_name,
+        "Market": market,
+        "Currency": currency,
         "Price": round(current_price, 2),
         "RSI_14": round(current_rsi, 1),
         "SMA_50": round(current_50, 2),
@@ -237,6 +266,7 @@ def push_to_supabase(df: pd.DataFrame):
             "Symbol": "symbol",
             "Company": "company",
             "Price": "price",
+            "Currency": "currency",
             "Signal": "signal",
             "RSI_14": "rsi_14",
             "SMA_50": "sma_50",
@@ -254,7 +284,7 @@ def push_to_supabase(df: pd.DataFrame):
         db_df["scan_timestamp"] = scan_time
 
         cols_to_keep = [
-            "scan_timestamp", "symbol", "company", "price",
+            "scan_timestamp", "symbol", "company", "price", "currency",
             "signal", "rsi_14", "sma_50", "sma_200", "sma_trend", "rationale",
             "atr_14", "stop_level_atr", "target_atr"
         ]
@@ -270,12 +300,13 @@ def push_to_supabase(df: pd.DataFrame):
         print(f"❌ Error inserting records to Supabase: {e}")
 
 def main():
-    print("Fetching TSX market data and computing signals...\n")
+    print("Fetching US & TSX market data and computing momentum models...\n")
     
-    # 1. Fetch user-added symbols from Supabase and union with baseline 59
+    # 1. Combine TSX and US watchlists with user-added custom additions
     custom_tickers = fetch_custom_watchlist()
-    full_watchlist = {**WATCHLIST, **custom_tickers}
-    print(f"📊 Scanning {len(full_watchlist)} total assets ({len(WATCHLIST)} baseline + {len(custom_tickers)} custom additions)...")
+    baseline_watchlist = {**TSX_WATCHLIST, **US_WATCHLIST}
+    full_watchlist = {**baseline_watchlist, **custom_tickers}
+    print(f"📊 Scanning {len(full_watchlist)} total assets ({len(TSX_WATCHLIST)} TSX + {len(US_WATCHLIST)} US + {len(custom_tickers)} custom additions)...")
 
     results = []
     actionable = []
@@ -312,7 +343,9 @@ def main():
             <tr>
                 <td style="padding: 8px; border: 1px solid #ddd;"><b>{item['Symbol']}</b></td>
                 <td style="padding: 8px; border: 1px solid #ddd;">{item['Company']}</td>
-                <td style="padding: 8px; border: 1px solid #ddd;">${item['Price']:.2f}</td>
+                <td style="padding: 8px; border: 1px solid #ddd; font-weight: bold;">
+                    ${item['Price']:.2f} <span style="font-size: 10px; color: #666;">{item['Currency']}</span>
+                </td>
                 <td style="padding: 8px; border: 1px solid #ddd; font-weight: bold; color: {'#008000' if 'BUY' in item['Signal'] else '#b30000'};">
                     {item['Signal']}
                 </td>
@@ -329,8 +362,8 @@ def main():
         email_html = f"""
         <html>
         <body style="font-family: Arial, sans-serif; color: #333;">
-            <h2 style="color: #0b3954;">🚨 TSX Market Actionable Alerts</h2>
-            <p>The following symbols have met your technical criteria for action (with ATR Volatility Bands):</p>
+            <h2 style="color: #0b3954;">🚨 TrendNorth Analytics: US & TSX Actionable Alerts</h2>
+            <p>The following securities have triggered technical inflection signals under Welles Wilder's ATR volatility model:</p>
             <table style="border-collapse: collapse; width: 100%; text-align: left; font-size: 13px;">
                 <thead>
                     <tr style="background-color: #f2f2f2;">
@@ -351,14 +384,14 @@ def main():
             </table>
             <br>
             <p style="font-size: 11px; color: #777;">
-                Disclaimer: TrendNorth is an educational research tool. ATR stop levels and price targets represent mathematical volatility models and do not constitute financial advice.
+                Disclaimer: TrendNorth Analytics is an educational technical research platform. ATR stop levels and swing targets represent mathematical models and do not constitute financial or advisory advice.
             </p>
         </body>
         </html>
         """
 
         send_stock_email(
-            subject=f"🚨 TSX Screener: {len(actionable)} Actionable Signal(s)",
+            subject=f"🚨 TrendNorth Momentum: {len(actionable)} Actionable US & TSX Signal(s)",
             html_body=email_html
         )
     else:
