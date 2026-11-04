@@ -195,7 +195,7 @@ export default function Dashboard() {
   // Active Tab State
   const [activeTab, setActiveTab] = useState('screener')
 
-  // TN-017: Market Universe Filter State
+  // Market Universe Filter State
   const [marketFilter, setMarketFilter] = useState<MarketUniverse>('ALL')
 
   // Watchlist Membership State
@@ -370,6 +370,35 @@ export default function Dashboard() {
       setMarketStatus({ status: 'CLOSED', detail: totalMinutes < openMin ? 'Pre-Market' : 'After Hours', timeMsg: 'Opens 9:30 AM ET' })
     }
   }
+
+  // --- POINT 3: INACTIVITY AUTO-LOGOUT (15 MINUTES) ---
+  useEffect(() => {
+    if (!user) return
+
+    const INACTIVITY_TIMEOUT_MS = 15 * 60 * 1000 // 15 minutes
+    let idleTimer: NodeJS.Timeout
+
+    const triggerAutoLogout = async () => {
+      console.warn("User session expired due to 15 minutes of inactivity.")
+      await handleSignOut()
+      alert("For your security, you have been signed out due to 15 minutes of inactivity.")
+    }
+
+    const resetTimer = () => {
+      clearTimeout(idleTimer)
+      idleTimer = setTimeout(triggerAutoLogout, INACTIVITY_TIMEOUT_MS)
+    }
+
+    const monitoredEvents = ['mousedown', 'mousemove', 'keydown', 'scroll', 'touchstart', 'click']
+    monitoredEvents.forEach(evt => window.addEventListener(evt, resetTimer, { passive: true }))
+
+    resetTimer()
+
+    return () => {
+      clearTimeout(idleTimer)
+      monitoredEvents.forEach(evt => window.removeEventListener(evt, resetTimer))
+    }
+  }, [user])
 
   useEffect(() => {
     const now = new Date()
@@ -736,11 +765,10 @@ export default function Dashboard() {
 
   const isDark = theme === 'dark'
 
-  // TN-017: Filter by Signal, Market Universe, Search, RSI, and Trend
+  // Filter by Signal, Market Universe, Search, RSI, and Trend
   const filteredAndSortedStocks = useMemo(() => {
     return activeMonitoredStocks
       .filter(s => {
-        // Market filter
         const isUsStock = !s.symbol.includes('.')
         if (marketFilter === 'TSX' && isUsStock) return false
         if (marketFilter === 'US' && !isUsStock) return false
@@ -925,13 +953,30 @@ export default function Dashboard() {
       <div className={`min-h-screen ${themeBg} font-sans flex flex-col justify-between transition-colors`}>
         <div>
           <header className={`sticky top-0 z-40 ${themeSubHeaderBg} backdrop-blur-md border-b px-6 lg:px-8 py-3.5 flex items-center justify-between`}>
-            <Button 
-              variant="outline" 
-              onClick={() => setActiveStockDetail(null)}
-              className={`gap-2 text-xs font-bold ${isDark ? 'bg-slate-800 hover:bg-slate-700 text-slate-100 border-slate-700' : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-300'} cursor-pointer`}
-            >
-              <ArrowLeft className="h-4 w-4" /> Back to Watchlist
-            </Button>
+            <div className="flex items-center gap-4">
+              <Button 
+                variant="outline" 
+                onClick={() => setActiveStockDetail(null)}
+                className={`gap-2 text-xs font-bold ${isDark ? 'bg-slate-800 hover:bg-slate-700 text-slate-100 border-slate-700' : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-300'} cursor-pointer`}
+              >
+                <ArrowLeft className="h-4 w-4" /> Back to Watchlist
+              </Button>
+
+              {/* Quick Return-Home Trigger */}
+              <button
+                type="button"
+                onClick={() => {
+                  setActiveStockDetail(null)
+                  setActiveTab('screener')
+                  setSearchQuery('')
+                }}
+                className="hidden md:flex items-center gap-2 cursor-pointer text-xs font-extrabold hover:text-emerald-400 transition-colors"
+                title="Return to Home Dashboard"
+              >
+                <span className="h-2.5 w-2.5 rounded-full bg-emerald-500" />
+                <span className={themeTextColor}>TrendNorth Home</span>
+              </button>
+            </div>
 
             <div className="flex items-center gap-3">
               <Button
@@ -1184,21 +1229,36 @@ export default function Dashboard() {
     <div className={`min-h-screen ${themeBg} font-sans flex flex-col justify-between selection:bg-sky-500/30 transition-colors`}>
       <div>
         <header className={`sticky top-0 z-40 ${themeSubHeaderBg} backdrop-blur-md border-b px-6 lg:px-8 py-3 flex items-center justify-between`}>
-          <div className="flex items-center space-x-3">
-            <div className="h-9 w-9 bg-linear-to-tr from-sky-600 to-indigo-600 rounded-xl flex items-center justify-center text-white font-extrabold shadow-lg shadow-sky-500/20 border border-sky-400/20">
-              TN
+          {/* POINT 1 & 2: BRAND LOGO + CLICK-TO-HOME BUTTON */}
+          <button
+            type="button"
+            onClick={() => {
+              setActiveStockDetail(null)
+              setActiveTab('screener')
+              setSearchQuery('')
+              window.scrollTo({ top: 0, behavior: 'smooth' })
+            }}
+            className="flex items-center space-x-3 text-left focus:outline-none cursor-pointer group hover:opacity-95 transition-all select-none"
+            title="Return to TrendNorth Home"
+          >
+            <div className="h-10 w-10 rounded-xl overflow-hidden shadow-lg border border-emerald-500/30 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform bg-slate-950">
+              <img 
+                src="/logo.png" 
+                alt="TrendNorth TN Logo" 
+                className="w-full h-full object-cover scale-105"
+              />
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <span className={`font-black text-lg tracking-tight ${themeTextColor}`}>
+                <span className={`font-black text-lg tracking-tight transition-colors group-hover:text-emerald-400 ${themeTextColor}`}>
                   TrendNorth Analytics
                 </span>
-                <span className="text-xs px-2 py-0.5 rounded-full font-bold bg-sky-500/20 text-sky-400 border border-sky-500/30">
+                <span className="text-xs px-2 py-0.5 rounded-full font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
                   US & TSX Momentum
                 </span>
               </div>
             </div>
-          </div>
+          </button>
 
           <div className="flex items-center space-x-3">
             {/* Quick Tour Button */}
@@ -1481,7 +1541,7 @@ export default function Dashboard() {
               {/* SEARCH & FILTERS BAR */}
               <div className={`p-4 rounded-2xl border shadow-xs space-y-3 ${themeCardBg}`}>
                 
-                {/* TN-017: MARKET UNIVERSE FILTER PILLS */}
+                {/* MARKET UNIVERSE FILTER PILLS */}
                 <div className="flex flex-wrap items-center gap-2 pb-1 border-b border-slate-200 dark:border-slate-800">
                   <span className={`text-xs font-extrabold uppercase tracking-wider mr-1 ${themeMutedColor}`}>Universe:</span>
                   {[
@@ -2549,7 +2609,7 @@ export default function Dashboard() {
               </div>
             </div>
 
-            {/* TN-005 Stop Loss Input */}
+            {/* Stop Loss Input */}
             <div className="space-y-1.5">
               <Label htmlFor="stopLoss" className={`text-xs font-bold ${themeTextColor}`}>
                 Technical Stop-Loss Level <span className="text-[10px] text-slate-400 font-normal">(Optional)</span>
