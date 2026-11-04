@@ -10,6 +10,7 @@ export interface ScreenerRecord {
   scan_timestamp: string
   symbol: string
   company: string
+  currency?: string
   price: number
   signal: 'BUY / ACCUMULATE' | 'SELL / EXIT' | 'TRIM / TAKE PROFIT' | 'KEEP / HOLD'
   rsi_14: number
